@@ -25,4 +25,5 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency "activesupport"
   s.add_runtime_dependency "actionpack"
   s.add_runtime_dependency "cityhash"
+  s.add_runtime_dependency "snappy"
 end

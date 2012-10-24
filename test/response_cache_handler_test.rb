@@ -24,7 +24,7 @@ class ResponseCacheHandlerTest < MiniTest::Unit::TestCase
   end
 
   def page
-    [200, "text/html", "<body>hi.</body>", 1331765506]
+    [200, "text/html", "\x10<<body>hi.</body>", 1331765506]
   end
 
   def test_cache_miss
@@ -102,6 +102,7 @@ class ResponseCacheHandlerTest < MiniTest::Unit::TestCase
 
   def expect_page_rendered(page)
     status, content_type, body, timestamp = page
+    body = Snappy.inflate(body)
     @controller.expects(:render).with(text: body, status: status)
     @controller.response.headers.expects(:[]=).with('Content-Type', content_type)
   end

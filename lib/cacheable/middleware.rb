@@ -26,7 +26,8 @@ module Cacheable
           end
 
           # Store result
-          cache_data = [status, headers['Content-Type'], body_string, timestamp]
+          body = Snappy.deflate(body_string)
+          cache_data = [status, headers['Content-Type'], body, timestamp]
           Cacheable.write_to_cache(env['cacheable.key']) do
             cache.write(env['cacheable.key'], cache_data)
             cache.write(env['cacheable.unversioned-key'], cache_data) if env['cacheable.unversioned-key']

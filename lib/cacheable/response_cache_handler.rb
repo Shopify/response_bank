@@ -1,4 +1,5 @@
 require 'cityhash'
+require 'snappy'
 
 module Cacheable
   class ResponseCacheHandler
@@ -44,7 +45,7 @@ module Cacheable
     end
 
     def key_hash(key)
-      "Cachable:#{CityHash.hash128(key)}"
+      "Cachable/snappy:#{CityHash.hash128(key)}"
     end
 
     def versioned_key
@@ -111,7 +112,8 @@ module Cacheable
         @env['cacheable.miss']  = false
         @env['cacheable.store'] = 'server'
 
-        status, content_type, body, timestamp = hit
+        status, content_type, deflated_body, timestamp = hit
+        body = Snappy.inflate(deflated_body)
 
         if cache_age_tolerance && page_too_old(timestamp, cache_age_tolerance)
           Cacheable.log "Found an unversioned cache entry, but it was too old (#{timestamp})"

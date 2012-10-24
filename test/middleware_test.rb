@@ -70,7 +70,7 @@ class MiddlewareTest < MiniTest::Unit::TestCase
       
   def test_cache_miss_and_not_found
     Cacheable::Middleware.any_instance.stubs(timestamp: 424242)
-    @cache_store.expects(:write).with('"abcd"', [404, 'text/plain', 'Hi', 424242]).times(1)
+    @cache_store.expects(:write).with('"abcd"', [404, 'text/plain', Snappy.deflate('Hi'), 424242]).times(1)
     
     env = Rack::MockRequest.env_for("http://example.com/index.html")
     
@@ -87,7 +87,7 @@ class MiddlewareTest < MiniTest::Unit::TestCase
   
   def test_cache_miss_and_store
     Cacheable::Middleware.any_instance.stubs(timestamp: 424242)
-    @cache_store.expects(:write).with('"abcd"', [200, 'text/plain', 'Hi', 424242]).times(1)
+    @cache_store.expects(:write).with('"abcd"', [200, 'text/plain', Snappy.deflate('Hi'), 424242]).times(1)
     
     env = Rack::MockRequest.env_for("http://example.com/index.html")
     
