@@ -110,13 +110,15 @@ module Cacheable
         @env['cacheable.miss']  = false
         @env['cacheable.store'] = 'server'
 
-        status, content_type, body, timestamp = hit
+        status, content_type, body, timestamp, location = hit
 
         if cache_age_tolerance && page_too_old(timestamp, cache_age_tolerance)
           Cacheable.log "Found an unversioned cache entry, but it was too old (#{timestamp})"
         else
           cache_return!(message) do
             response.headers['Content-Type'] = content_type
+
+            response.headers['Location'] = location if location
 
             if request.env["gzip"]
               response.headers['Content-Encoding'] = "gzip"

@@ -33,6 +33,8 @@ module Cacheable
 
           # Store result
           cache_data = [status, headers['Content-Type'], body_gz, timestamp]
+          cache_data << headers['Location'] if status == 301
+
           Cacheable.write_to_cache(env['cacheable.key']) do
             cache.write(env['cacheable.key'], cache_data)
             cache.write(env['cacheable.unversioned-key'], cache_data) if env['cacheable.unversioned-key']

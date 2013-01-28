@@ -24,13 +24,23 @@ def not_found(env)
   [ 404, {'Content-Type' => 'text/plain'}, body ]
 end
 
+def cached_moved(env)
+  env['cacheable.cache'] = true
+  env['cacheable.miss']  = false
+  env['cacheable.key']   = '"abcd"'
+  env['cacheable.store'] = 'server'
+
+  body = block_given? ? [yield] : ['Hi']
+  [ 301, {'Location' => 'http://shopify.com'}, []]
+end
+
 def moved(env)
   env['cacheable.cache'] = true
   env['cacheable.miss']  = true
   env['cacheable.key']   = '"abcd"'
 
   body = block_given? ? [yield] : ['Hi']
-  [ 301, {'Location' => 'http://shopify.com'}, []]
+  [ 301, {'Location' => 'http://shopify.com', 'Content-Type' => 'text/plain'}, []]
 end
 
 def cacheable_app(env)  
@@ -88,6 +98,18 @@ class MiddlewareTest < MiniTest::Unit::TestCase
     assert_equal '"abcd"', result[1]['ETag']
   end
 
+  def test_cache_hit_and_moved
+    @cache_store.expects(:write).never
+
+    env = Rack::MockRequest.env_for("http://example.com/index.html")
+
+    ware = Cacheable::Middleware.new(method(:cached_moved), @cache_store)
+    result = ware.call(env)
+
+    assert_equal '"abcd"', result[1]['ETag']
+    assert_equal 'http://shopify.com', result[1]['Location']
+  end
+
   def test_cache_miss_and_moved
     @cache_store.expects(:write).once()
 
@@ -97,6 +119,7 @@ class MiddlewareTest < MiniTest::Unit::TestCase
     result = ware.call(env)
 
     assert_equal '"abcd"', result[1]['ETag']
+    assert_equal 'http://shopify.com', result[1]['Location']
   end
 
   def test_cache_miss_and_store
@@ -106,6 +129,26 @@ class MiddlewareTest < MiniTest::Unit::TestCase
     env = Rack::MockRequest.env_for("http://example.com/index.html")
     
     ware = Cacheable::Middleware.new(method(:cacheable_app), @cache_store)
+    result = ware.call(env)
+
+    assert env['cacheable.cache']
+    assert env['cacheable.miss']
+
+    assert_equal '"abcd"', result[1]['ETag']
+    assert_equal 'miss', result[1]['X-Cache']
+    assert_nil env['cacheable.store']
+
+    # no gzip support here
+    assert !result[1]['Content-Encoding']    
+  end
+
+  def test_cache_miss_and_store_on_moved
+    Cacheable::Middleware.any_instance.stubs(timestamp: 424242)
+    @cache_store.expects(:write).with('"abcd"', [301, 'text/plain', Cacheable.compress(''), 424242, 'http://shopify.com']).once()
+    
+    env = Rack::MockRequest.env_for("http://example.com/index.html")
+    
+    ware = Cacheable::Middleware.new(method(:moved), @cache_store)
     result = ware.call(env)
 
     assert env['cacheable.cache']
