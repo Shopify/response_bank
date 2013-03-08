@@ -103,6 +103,16 @@ class ResponseCacheHandlerTest < MiniTest::Unit::TestCase
     assert_equal 'some text', controller.response.body
   end
 
+  def test_double_render_still_renders
+    @controller.stubs(:serve_from_browser_cache)
+    @controller.stubs(:serve_from_cache)
+    @controller.stubs(force_refill_cache?: false)
+    Cacheable.expects(:acquire_lock).once.returns(true)
+
+    handler.run!
+    handler.run!
+  end
+
   def assert_env(miss, store)
     vkh  = handler.versioned_key_hash
     uvkh = handler.unversioned_key_hash

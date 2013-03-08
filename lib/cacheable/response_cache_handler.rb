@@ -65,16 +65,17 @@ module Cacheable
     end
 
     def try_to_serve_from_cache
+
       # Etag
       serve_from_browser_cache(versioned_key_hash)
 
-      # Memcached 
+      # Memcached
       serve_from_cache(versioned_key_hash)
 
       # execute if we can get the lock
       execute
 
-      # serve a stale version 
+      # serve a stale version
       if serving_from_noncurrent_but_recent_version_acceptable?
 
         serve_from_cache(unversioned_key_hash, @cache_age_tolerance, "Cache hit: server (recent)")
@@ -83,12 +84,13 @@ module Cacheable
     end
 
     def execute
-      if Cacheable.acquire_lock(versioned_key_hash)
+      @env['cacheable.locked'] ||= false
+      if @env['cacheable.locked'] || Cacheable.acquire_lock(versioned_key_hash)
+        @env['cacheable.locked'] = true
         @env['cacheable.miss']  = true
         cache_return!("Refilling cache", &@block)
       end
     end
-
 
     def serving_from_noncurrent_but_recent_version_acceptable?
       @cache_age_tolerance > 0
