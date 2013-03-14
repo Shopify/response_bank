@@ -211,5 +211,46 @@ class MiddlewareTest < MiniTest::Unit::TestCase
     assert_equal 'client', env['cacheable.store']
     assert_equal '"abcd"', result[1]['ETag']
   end
-  
+
+  def test_ie_ajax
+    ware = Cacheable::Middleware.new(method(:already_cached_app), @cache_store)
+    env = Rack::MockRequest.env_for("http://example.com/index.html")
+
+    assert !ware.ie_ajax_request?(env)
+
+    env = Rack::MockRequest.env_for("http://example.com/index.html")
+    env["HTTP_USER_AGENT"] = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)"
+
+    assert !ware.ie_ajax_request?(env)
+
+    env = Rack::MockRequest.env_for("http://example.com/index.html")
+    env["HTTP_USER_AGENT"] = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)"
+    env["HTTP_X_REQUESTED_WITH"] = "XmlHttpRequest"
+
+    assert ware.ie_ajax_request?(env)
+
+    env = Rack::MockRequest.env_for("http://example.com/index.html")
+    env["HTTP_USER_AGENT"] = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)"
+    env["HTTP_ACCEPT"] = "application/json"
+
+    assert ware.ie_ajax_request?(env)
+  end
+
+  def test_cache_hit_server_with_ie_ajax
+    @cache_store.expects(:write).times(0)
+
+    env = Rack::MockRequest.env_for("http://example.com/index.html")
+    env["HTTP_USER_AGENT"] = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)"
+    env["HTTP_X_REQUESTED_WITH"] = "XmlHttpRequest"
+
+    ware = Cacheable::Middleware.new(method(:already_cached_app), @cache_store)
+    result = ware.call(env)
+
+    assert env['cacheable.cache']
+    assert !env['cacheable.miss']
+    assert_equal 'server', env['cacheable.store']
+    assert_equal '"abcd"', result[1]['ETag']
+    assert_equal "-1", result[1]['Expires']
+  end
+
 end

@@ -1,3 +1,5 @@
+require 'useragent'
+
 module Cacheable
   class Middleware
 
@@ -17,6 +19,9 @@ module Cacheable
         if [200, 404, 301, 304].include?(status)
           headers['ETag'] = env['cacheable.key']
           headers['X-Alternate-Cache-Key'] = env['cacheable.unversioned-key']
+          if ie_ajax_request?(env)
+            headers["Expires"] = "-1"
+          end
         end
 
         if [200, 404, 301].include?(status) && env['cacheable.miss']
@@ -66,6 +71,11 @@ module Cacheable
       @cache_store ||= Rails.cache
     end
 
+    def ie_ajax_request?(env)
+      return false unless env["HTTP_USER_AGENT"].present? && (env["HTTP_X_REQUESTED_WITH"].present? || env["HTTP_ACCEPT"].present?)
+      agent = UserAgent.parse(env["HTTP_USER_AGENT"])
+      agent.browser == "Internet Explorer" && (env["HTTP_X_REQUESTED_WITH"] == "XmlHttpRequest" || env["HTTP_ACCEPT"] == "application/json")
+    end
   end
 
 end
