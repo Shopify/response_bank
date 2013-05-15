@@ -6,7 +6,6 @@ require 'cacheable/response_cache_handler'
 require 'cacheable/controller'
 
 module Cacheable
-
   def self.log(message)
     Rails.logger.info "[Cacheable] #{message}"
   end
@@ -27,11 +26,11 @@ module Cacheable
   ensure
     gz.close
   end
-  
+
   def self.decompress(content)
     Zlib::GzipReader.new(StringIO.new(content)).read
   end
-  
+
   def self.cache_key_for(data)
     case data
     when Hash, Array
@@ -46,16 +45,4 @@ module Cacheable
       data.to_s.inspect
     end
   end
-  
 end
-
-
-
-
-
-
-
-
-
-
-

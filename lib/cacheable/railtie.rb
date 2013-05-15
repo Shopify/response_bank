@@ -6,16 +6,15 @@ module Cacheable
 
       ActionController::Base.send(:include, Cacheable::Controller)
 
-      ActiveRecord::Base.class_eval do  
+      ActiveRecord::Base.class_eval do
         def self.cache_store
           ActionController::Base.cache_store
-        end  
+        end
 
         def cache_store
           ActionController::Base.cache_store
-        end  
+        end
       end
     end
   end
-
 end

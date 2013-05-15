@@ -1,6 +1,6 @@
 module Cacheable
   module Controller
-    # Only get? and head? requests should be cacheable 
+    # Only get? and head? requests should be cacheable
     def cacheable_request?
       request.get? or request.head? and not request.params[:cache] == 'false'
     end
@@ -25,8 +25,11 @@ module Cacheable
     end
 
     def response_cache(key_data=nil, version_data=nil, &block)
-      return yield unless cache_configured? && cacheable_request?
-      
+      unless cache_configured? && cacheable_request?
+        Cacheable.log("Uncacheable request. cache_configured='#{!!cache_configured?}' cacheable_request='#{cacheable_request?}' params_cache='#{request.params[:cache] != 'false'}'")
+        return yield
+      end
+
       handler = Cacheable::ResponseCacheHandler.new(self) do |h|
         h.key_data       = key_data       || cache_key_data
         h.version_data   = version_data   || cache_version_data

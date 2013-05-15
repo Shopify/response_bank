@@ -77,5 +77,4 @@ module Cacheable
       agent.browser == "Internet Explorer" && (env["HTTP_X_REQUESTED_WITH"] == "XmlHttpRequest" || env["HTTP_ACCEPT"] == "application/json")
     end
   end
-
 end
