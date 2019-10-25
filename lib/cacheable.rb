@@ -32,6 +32,7 @@ module Cacheable
   def self.compress(content)
     io = StringIO.new
     gz = Zlib::GzipWriter.new(io)
+    gz.mtime = 1
     gz.write(content)
     io.string
   ensure
