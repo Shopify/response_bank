@@ -24,7 +24,7 @@ class ResponseCacheHandlerTest < Minitest::Test
       serve_unversioned: controller.send(:serve_unversioned_cacheable_entry?),
       cache_age_tolerance: controller.send(:cache_age_tolerance_in_seconds),
       headers: controller.response.headers,
-      controller: controller,
+      response: controller.response,
       &proc { [200, {}, 'some text'] }
     )
   end
@@ -52,7 +52,7 @@ class ResponseCacheHandlerTest < Minitest::Test
       serve_unversioned: controller.send(:serve_unversioned_cacheable_entry?),
       cache_age_tolerance: controller.send(:cache_age_tolerance_in_seconds),
       headers: controller.response.headers,
-      controller: controller,
+      response: controller.response,
       &proc { nil }
     )
 

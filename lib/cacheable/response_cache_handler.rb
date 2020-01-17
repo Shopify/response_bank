@@ -12,7 +12,7 @@ module Cacheable
       headers:,
       force_refill_cache: false,
       cache_store: Cacheable.cache_store,
-      controller:,
+      response:,
       &block
     )
       @cache_miss_block = block
@@ -26,7 +26,7 @@ module Cacheable
       @force_refill_cache = force_refill_cache
       @cache_store = cache_store
       @headers = headers || {}
-      @controller = controller
+      @response = response
     end
 
     def run!
@@ -44,7 +44,7 @@ module Cacheable
         # No cache hit; this request cannot be handled from cache.
         # Yield to the controller and mark for writing into cache.
         @env['cacheable.miss'] = true
-        @controller.response_body || @cache_miss_block.call
+        @response.body || @cache_miss_block.call
       end
     end
 
