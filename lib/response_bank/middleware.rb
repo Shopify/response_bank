@@ -7,6 +7,10 @@ module ResponseBank
     ACCEPT = "HTTP_ACCEPT"
     USER_AGENT = "HTTP_USER_AGENT"
 
+    class_attribute :cacheable_status_codes
+
+    @cacheable_status_codes = [200, 404, 301]
+
     def initialize(app)
       @app = app
     end
@@ -18,7 +22,7 @@ module ResponseBank
       status, headers, body = @app.call(env)
 
       if env['cacheable.cache']
-        if [200, 404, 301, 304].include?(status)
+        if self.class.cacheable_status_codes.include?(status) || status == 304
           headers['ETag'] = env['cacheable.key']
           headers['X-Alternate-Cache-Key'] = env['cacheable.unversioned-key']
 
@@ -27,7 +31,7 @@ module ResponseBank
           end
         end
 
-        if [200, 404, 301].include?(status) && env['cacheable.miss']
+        if self.class.cacheable_status_codes.include?(status) && env['cacheable.miss']
           # Flatten down the result so that it can be stored to memcached.
           if body.is_a?(String)
             body_string = body
