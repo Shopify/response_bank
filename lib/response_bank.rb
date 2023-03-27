@@ -59,7 +59,7 @@ module ResponseBank
       when Time, DateTime
         data.to_i
       when Date
-        data.to_time.to_i
+        data.to_s # Date#to_i does not support timezones, using iso8601 instead
       when true, false, Integer, Symbol, String
         data.inspect
       else

@@ -32,4 +32,29 @@ class ResponseBankTest < Minitest::Test
     expected = %|bar,1,a,b,2,{:baz=>\"buzz\"},{:red=>[\"blue\", \"green\"], :day=>true, :night=>nil, :updated_at=>2011-06-29 15:47:47 UTC, :published_on=>Wed, 29 Jun 2011},text/html:42| # rubocop:disable Metrics/LineLength
     assert_equal(expected, ResponseBank.cache_key_for(key: @data, version: version))
   end
+
+  def test_cache_key_for_array
+    assert_equal('["foo", "bar", "baz"]', ResponseBank.cache_key_for(%w[foo bar baz]))
+  end
+
+  def test_cache_key_for_int
+    assert_equal('1234', ResponseBank.cache_key_for(1234))
+  end
+
+  def test_cache_key_for_boolean
+    assert_equal('true', ResponseBank.cache_key_for(true))
+    assert_equal('false', ResponseBank.cache_key_for(false))
+  end
+
+  def test_cache_key_for_symbol
+    assert_equal(':asdf', ResponseBank.cache_key_for(:asdf))
+  end
+
+  def test_cache_key_for_datetime
+    assert_equal(1577836800, ResponseBank.cache_key_for(DateTime.new(2020, 1, 1, 0, 0, 0, '+00:00')))
+  end
+
+  def test_cache_key_for_date
+    assert_equal("2020-01-01", ResponseBank.cache_key_for(Date.new(2020, 1, 1)))
+  end
 end

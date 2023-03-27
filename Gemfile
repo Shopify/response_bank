@@ -4,5 +4,7 @@ source "https://rubygems.org"
 # Specify your gem's dependencies in response_bank.gemspec
 gemspec
 
-gem 'rails', '~> 6.0.0'
-gem 'rubocop', '0.78.0', require: false
+gem 'rails', '~> 7.0.4'
+gem 'rubocop', '1.48.0', require: false
+gem 'simplecov', require: false, group: :test
+
