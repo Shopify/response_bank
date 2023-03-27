@@ -1,4 +1,4 @@
-# ResponseBank [[![Build Status](https://github.com/Shopify/response_bank/actions/workflows/ci.yml/badge.svg)](https://github.com/Shopify/response_bank/actions/workflows/ci.yml)
+# ResponseBank [![Build Status](https://secure.travis-ci.org/Shopify/response_bank.png)](http://travis-ci.org/Shopify/response_bank) [![CI Status](https://github.com/Shopify/response_bank/actions/workflows/ci.yml/badge.svg)](https://github.com/Shopify/response_bank/actions/workflows/ci.yml)
 
 ## Features
 
