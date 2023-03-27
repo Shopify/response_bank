@@ -79,6 +79,15 @@ def client_hit_app(env)
 end
 
 class MiddlewareTest < Minitest::Test
+  def setup
+    @original_cache_store = ResponseBank.cache_store
+    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
+  end
+
+  def teardown
+    ResponseBank.cache_store = @original_cache_store
+  end
+
   def test_cache_miss_and_ignore
     env = Rack::MockRequest.env_for("http://example.com/index.html")
 
@@ -89,7 +98,6 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_cache_miss_and_not_found
-    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
     ResponseBank.cache_store.expects(:write).once
 
     env = Rack::MockRequest.env_for("http://example.com/index.html")
@@ -101,7 +109,6 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_cache_hit_and_moved
-    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
     ResponseBank.cache_store.expects(:write).never
 
     env = Rack::MockRequest.env_for("http://example.com/index.html")
@@ -114,7 +121,6 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_cache_miss_and_moved
-    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
     ResponseBank.cache_store.expects(:write).once
 
     env = Rack::MockRequest.env_for("http://example.com/index.html")
@@ -126,7 +132,6 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_cache_miss_and_store
-    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
     ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
     ResponseBank.cache_store.expects(:write).with(
       '"abcd"',
@@ -152,7 +157,6 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_cache_miss_and_store_with_shortened_cache_expiry
-    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
     env = Rack::MockRequest.env_for("http://example.com/index.html")
     env['cacheable.versioned-cache-expiry'] = 30.seconds
 
@@ -164,7 +168,6 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_cache_miss_and_store_on_moved
-    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
     ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
     ResponseBank.cache_store.expects(:write).with(
       '"abcd"',
@@ -190,7 +193,6 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_cache_miss_and_store_with_gzip_support
-    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
     ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
     ResponseBank.cache_store.expects(:write).with(
       '"abcd"',
@@ -218,7 +220,6 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_cache_hit_server
-    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
     ResponseBank.cache_store.expects(:write).times(0)
 
     env = Rack::MockRequest.env_for("http://example.com/index.html")
@@ -233,7 +234,6 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_cache_hit_client
-    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
     ResponseBank.cache_store.expects(:write).times(0)
 
     env = Rack::MockRequest.env_for("http://example.com/index.html")
@@ -248,7 +248,6 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_ie_ajax
-    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
     ware = ResponseBank::Middleware.new(method(:already_cached_app))
     env = Rack::MockRequest.env_for("http://example.com/index.html")
 
@@ -273,7 +272,6 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_cache_hit_server_with_ie_ajax
-    ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
     ResponseBank.cache_store.expects(:write).times(0)
 
     env = Rack::MockRequest.env_for("http://example.com/index.html")

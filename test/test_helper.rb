@@ -69,19 +69,4 @@ class MockController < ActionController::Base
   end
 end
 
-class << ResponseBank
-  module ScrubGzipTimestamp
-    def compress(*)
-      gzip_content = super
-      gzip_content = gzip_content.b # get byte-wise access
-      # bytes in the range [4, 8) is a timestamp in the GZIP header, which causes flakiness in tests.
-      gzip_content[4, 4] = "\0\0\0\0"
-
-      gzip_content
-    end
-  end
-  prepend(ScrubGzipTimestamp)
-end
-
 $LOAD_PATH << File.expand_path('../lib', __FILE__)
-require 'response_bank'
