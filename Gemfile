@@ -5,6 +5,6 @@ source "https://rubygems.org"
 gemspec
 
 gem 'rails', '~> 7.0.4'
-gem 'rubocop', '1.48.0', require: false
+gem 'rubocop', require: false, group: :test
+gem 'mocha', require: false, group: :test
 gem 'simplecov', require: false, group: :test
-

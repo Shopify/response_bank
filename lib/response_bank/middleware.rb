@@ -3,6 +3,10 @@ require 'useragent'
 
 module ResponseBank
   class Middleware
+    # Limit the cached headers
+    # TODO: Make this lowercase/case-insentitive as per rfc2616 §4.2
+    CACHEABLE_HEADERS = ["Location", "Content-Type", "ETag", "Content-Encoding", "Last-Modified", "Cache-Control", "Expires", "Surrogate-Keys", "Cache-Tags"].freeze
+
     REQUESTED_WITH = "HTTP_X_REQUESTED_WITH"
     ACCEPT = "HTTP_ACCEPT"
     USER_AGENT = "HTTP_USER_AGENT"
@@ -20,7 +24,6 @@ module ResponseBank
       if env['cacheable.cache']
         if [200, 404, 301, 304].include?(status)
           headers['ETag'] = env['cacheable.key']
-          headers['X-Alternate-Cache-Key'] = env['cacheable.unversioned-key']
 
           if ie_ajax_request?(env)
             headers["Expires"] = "-1"
@@ -38,22 +41,18 @@ module ResponseBank
 
           body_gz = ResponseBank.compress(body_string)
 
+          cached_headers = headers.slice(*CACHEABLE_HEADERS)
           # Store result
-          cache_data = [status, headers['Content-Type'], body_gz, timestamp]
-          cache_data << headers['Location'] if status == 301
+          cache_data = [status, cached_headers, body_gz, timestamp]
 
           ResponseBank.write_to_cache(env['cacheable.key']) do
             payload = MessagePack.dump(cache_data)
             ResponseBank.write_to_backing_cache_store(
               env,
-              env['cacheable.key'],
+              env['cacheable.unversioned-key'],
               payload,
               expires_in: env['cacheable.versioned-cache-expiry'],
             )
-
-            if env['cacheable.unversioned-key']
-              ResponseBank.write_to_backing_cache_store(env, env['cacheable.unversioned-key'], payload)
-            end
           end
 
           # since we had to generate the gz version above already we may

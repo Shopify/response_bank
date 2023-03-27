@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    response_bank (1.1.0)
+    response_bank (1.2.0)
       msgpack
       useragent
 
@@ -151,7 +151,7 @@ GEM
     rake (13.0.6)
     regexp_parser (2.7.0)
     rexml (3.2.5)
-    rubocop (1.48.0)
+    rubocop (1.48.1)
       json (~> 2.3)
       parallel (~> 1.10)
       parser (>= 3.2.0.0)
@@ -175,8 +175,6 @@ GEM
     timeout (0.3.2)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
-    tzinfo-data (1.2023.2)
-      tzinfo (>= 1.0.0)
     unicode-display_width (2.4.2)
     useragent (0.16.10)
     websocket-driver (0.7.5)
@@ -188,14 +186,13 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  minitest (>= 5.13.0)
-  mocha (>= 1.10.0)
+  minitest (>= 5.18.0)
+  mocha
   rails (~> 7.0.4)
   rake
   response_bank!
-  rubocop (= 1.48.0)
+  rubocop
   simplecov
-  tzinfo-data (>= 1.2019.3)
 
 BUNDLED WITH
    2.3.11
