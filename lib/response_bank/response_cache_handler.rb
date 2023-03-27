@@ -131,13 +131,13 @@ module ResponseBank
           if ResponseBank.acquire_lock(match_entity_tag)
             # execute if we can get the lock
             @env['cacheable.locked'] = true
-            return nil
+            return
           elsif stale_while_revalidate?(timestamp, cache_age_tolerance)
             # cache is being regenerated, can we avoid piling on and use a stale version in the interim?
             ResponseBank.log("Cache hit: server (recent)")
           else
             ResponseBank.log("Found an unversioned cache entry, but it was too old (#{timestamp})")
-            return nil
+            return
           end
         end
 
