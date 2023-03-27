@@ -20,9 +20,11 @@ Gem::Specification.new do |s|
   s.metadata["allowed_push_host"] = "https://rubygems.org"
 
   s.add_runtime_dependency("msgpack")
+  s.add_runtime_dependency("brotli")
 
   s.add_development_dependency("minitest", ">= 5.18.0")
   s.add_development_dependency("mocha", ">= 2.0.0")
   s.add_development_dependency("rake")
   s.add_development_dependency("rails", ">= 6.1")
+  s.add_development_dependency("pry")
 end

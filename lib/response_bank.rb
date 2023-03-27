@@ -3,6 +3,7 @@ require 'response_bank/middleware'
 require 'response_bank/railtie' if defined?(Rails)
 require 'response_bank/response_cache_handler'
 require 'msgpack'
+require 'brotli'
 
 module ResponseBank
   class << self
@@ -29,17 +30,26 @@ module ResponseBank
       backing_cache_store.read(cache_key, raw: true)
     end
 
-    def compress(content)
-      io = StringIO.new
-      gz = Zlib::GzipWriter.new(io)
-      gz.write(content)
-      io.string
-    ensure
-      gz.close
+    def compress(content, encoding = 'br')
+      case encoding
+      when 'gzip'
+        Zlib.gzip(content)
+      when 'br'
+        Brotli.deflate(content)
+      else
+        raise ArgumentError, "Unsupported encoding: #{encoding}"
+      end
     end
 
-    def decompress(content)
-      Zlib::GzipReader.new(StringIO.new(content)).read
+    def decompress(content, encoding = 'br')
+      case encoding
+      when 'gzip'
+        Zlib.gunzip(content)
+      when 'br'
+        Brotli.inflate(content)
+      else
+        raise ArgumentError, "Unsupported encoding: #{encoding}"
+      end
     end
 
     def cache_key_for(data)
@@ -64,6 +74,17 @@ module ResponseBank
         data.inspect
       else
         data.to_s.inspect
+      end
+    end
+
+    def check_encoding(env, default_encoding = 'br')
+      if env['HTTP_ACCEPT_ENCODING'].to_s.include?('br')
+        'br'
+      elsif env['HTTP_ACCEPT_ENCODING'].to_s.include?('gzip')
+        'gzip'
+      else
+        # No encoding requested from client, but we still need to cache the page in server cache
+        default_encoding
       end
     end
 
