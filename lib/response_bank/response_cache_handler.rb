@@ -3,6 +3,8 @@ require 'digest/md5'
 
 module ResponseBank
   class ResponseCacheHandler
+    CACHE_KEY_SCHEMA_VERSION = 1
+
     def initialize(
       key_data:,
       version_data:,
@@ -25,6 +27,7 @@ module ResponseBank
       @force_refill_cache = force_refill_cache
       @cache_store = cache_store
       @headers = headers || {}
+      @key_schema_version = @env.key?('cacheable.key_version') ? @env.key['cacheable.key_version'] : CACHE_KEY_SCHEMA_VERSION
     end
 
     def run!
@@ -56,11 +59,11 @@ module ResponseBank
     end
 
     def entity_tag
-      @entity_tag ||= ResponseBank.cache_key_for(key: @key_data, version: @version_data)
+      @entity_tag ||= ResponseBank.cache_key_for(key: @key_data, version: @version_data, key_schema_version: @key_schema_version)
     end
 
     def cache_key
-      @cache_key ||= ResponseBank.cache_key_for(key: @key_data)
+      @cache_key ||= ResponseBank.cache_key_for(key: @key_data, key_schema_version: @key_schema_version)
     end
 
     def cacheable_info_dump
@@ -112,11 +115,7 @@ module ResponseBank
         @env['cacheable.miss']  = false
         @env['cacheable.store'] = 'server'
 
-        status, headers, body, timestamp, location = hit
-
-        # polyfill headers for legacy versions
-        headers = { 'Content-Type' => headers.to_s } if headers.is_a? String
-        headers['Location'] = location if location
+        status, headers, body, timestamp = hit
 
         @env['cacheable.locked'] ||= false
 

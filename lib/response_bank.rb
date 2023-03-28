@@ -49,11 +49,11 @@ module ResponseBank
 
         key = hash_value_str(data[:key])
 
-        return key unless data.key?(:version)
+        key = %{#{data[:key_schema_version]}:#{key}} unless data[:key_schema_version].blank?
 
-        version = hash_value_str(data[:version])
+        key = %{#{key}:#{hash_value_str(data[:version])}} unless data[:version].blank?
 
-        [key, version].join(":")
+        key
       when Array
         data.inspect
       when Time, DateTime

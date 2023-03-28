@@ -33,6 +33,17 @@ class ResponseBankTest < Minitest::Test
     assert_equal(expected, ResponseBank.cache_key_for(key: @data, version: version))
   end
 
+  def test_cache_key_with_version
+    key = "/index.html"
+    version = 42
+    assert_equal('/index.html', ResponseBank.cache_key_for({key: key}))
+    assert_equal('/index.html:42', ResponseBank.cache_key_for({key: key, version: version}))
+    assert_equal('/index.html:42', ResponseBank.cache_key_for({key: key, version: version, key_schema_version: nil}))
+    assert_equal('/index.html:42', ResponseBank.cache_key_for({key: key, version: version, key_schema_version: ""}))
+    assert_equal('1:/index.html:42', ResponseBank.cache_key_for({key: key, version: version, key_schema_version: 1}))
+  end
+
+
   def test_cache_key_for_array
     assert_equal('["foo", "bar", "baz"]', ResponseBank.cache_key_for(%w[foo bar baz]))
   end
