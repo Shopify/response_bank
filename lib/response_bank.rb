@@ -49,9 +49,9 @@ module ResponseBank
 
         key = hash_value_str(data[:key])
 
-        key = %{#{data[:key_schema_version]}:#{key}} unless data[:key_schema_version].blank?
+        key = %{#{data[:key_schema_version]}:#{key}} if data[:key_schema_version]
 
-        key = %{#{key}:#{hash_value_str(data[:version])}} unless data[:version].blank?
+        key = %{#{key}:#{hash_value_str(data[:version])}} if data[:version]
 
         key
       when Array

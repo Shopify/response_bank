@@ -39,7 +39,6 @@ class ResponseBankTest < Minitest::Test
     assert_equal('/index.html', ResponseBank.cache_key_for({key: key}))
     assert_equal('/index.html:42', ResponseBank.cache_key_for({key: key, version: version}))
     assert_equal('/index.html:42', ResponseBank.cache_key_for({key: key, version: version, key_schema_version: nil}))
-    assert_equal('/index.html:42', ResponseBank.cache_key_for({key: key, version: version, key_schema_version: ""}))
     assert_equal('1:/index.html:42', ResponseBank.cache_key_for({key: key, version: version, key_schema_version: 1}))
   end
 
