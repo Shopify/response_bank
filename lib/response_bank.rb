@@ -33,9 +33,9 @@ module ResponseBank
     def compress(content, encoding = 'br')
       case encoding
       when 'gzip'
-        Zlib.gzip(content)
+        Zlib.gzip(content, level: Zlib::BEST_COMPRESSION)
       when 'br'
-        Brotli.deflate(content)
+        Brotli.deflate(content, mode: :text, quality: 7)
       else
         raise ArgumentError, "Unsupported encoding: #{encoding}"
       end
@@ -62,6 +62,9 @@ module ResponseBank
         key = %{#{data[:key_schema_version]}:#{key}} if data[:key_schema_version]
 
         key = %{#{key}:#{hash_value_str(data[:version])}} if data[:version]
+
+        # add the encoding to only the cache key but don't expose this detail in the entity_tag
+        key = %{#{key}:#{hash_value_str(data[:encoding])}} if data[:encoding] && data[:encoding] != "gzip"
 
         key
       when Array

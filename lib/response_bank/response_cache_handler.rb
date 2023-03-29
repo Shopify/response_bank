@@ -63,9 +63,7 @@ module ResponseBank
     end
 
     def cache_key
-      # add the encoding to only the cache key but don't expose this detail in the entity_tag
-      # TODO: consider moving this to the cache_key_for method
-      @cache_key ||= ResponseBank.cache_key_for(key: @key_data, key_schema_version: @key_schema_version) + @env['response_bank.server_cache_encoding']
+      @cache_key ||= ResponseBank.cache_key_for(key: @key_data, key_schema_version: @key_schema_version, encoding: @env['response_bank.server_cache_encoding'])
     end
 
     def cacheable_info_dump
