@@ -64,6 +64,7 @@ class ResponseBankControllerTest < Minitest::Test
   end
 
   def test_client_cache_hit
+    controller.request.env['response_bank.server_cache_encoding'] = 'br'
     controller.request.env['HTTP_IF_NONE_MATCH'] = 'deadbeef'
     ResponseBank::ResponseCacheHandler.any_instance.expects(:entity_tag_hash).returns('deadbeef').at_least_once
     controller.expects(:head).with(:not_modified)
