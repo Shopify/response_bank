@@ -30,7 +30,7 @@ module ResponseBank
       backing_cache_store.read(cache_key, raw: true)
     end
 
-    def compress(content, encoding = 'br')
+    def compress(content, encoding = "gzip")
       case encoding
       when 'gzip'
         Zlib.gzip(content, level: Zlib::BEST_COMPRESSION)
@@ -41,7 +41,7 @@ module ResponseBank
       end
     end
 
-    def decompress(content, encoding = 'br')
+    def decompress(content, encoding = "gzip")
       case encoding
       when 'gzip'
         Zlib.gunzip(content)
