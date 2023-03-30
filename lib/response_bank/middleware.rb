@@ -1,5 +1,4 @@
 # frozen_string_literal: true
-require 'useragent'
 
 module ResponseBank
   class Middleware
@@ -25,9 +24,6 @@ module ResponseBank
         if [200, 404, 301, 304].include?(status)
           headers['ETag'] = env['cacheable.key']
 
-          if ie_ajax_request?(env)
-            headers["Expires"] = "-1"
-          end
         end
 
         if [200, 404, 301].include?(status) && env['cacheable.miss']
@@ -79,14 +75,5 @@ module ResponseBank
       Time.now.to_i
     end
 
-    def ie_ajax_request?(env)
-      return false unless !env[USER_AGENT].nil? && !env[USER_AGENT].empty?
-
-      if env[REQUESTED_WITH] == "XmlHttpRequest" || env[ACCEPT] == "application/json"
-        UserAgent.parse(env["HTTP_USER_AGENT"]).is_a?(UserAgent::Browsers::InternetExplorer)
-      else
-        false
-      end
-    end
   end
 end

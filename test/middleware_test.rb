@@ -300,46 +300,4 @@ class MiddlewareTest < Minitest::Test
     assert_equal('client', env['cacheable.store'])
     assert_equal('"etag_value"', headers['ETag'])
   end
-
-  def test_ie_ajax
-    ware = ResponseBank::Middleware.new(method(:already_cached_app))
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-
-    assert(!ware.send(:ie_ajax_request?, env))
-
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-    env["HTTP_USER_AGENT"] = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)"
-
-    assert(!ware.send(:ie_ajax_request?, env))
-
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-    env["HTTP_USER_AGENT"] = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)"
-    env["HTTP_X_REQUESTED_WITH"] = "XmlHttpRequest"
-
-    assert(ware.send(:ie_ajax_request?, env))
-
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-    env["HTTP_USER_AGENT"] = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)"
-    env["HTTP_ACCEPT"] = "application/json"
-
-    assert(ware.send(:ie_ajax_request?, env))
-  end
-
-  def test_cache_hit_server_with_ie_ajax
-    ResponseBank.cache_store.expects(:write).times(0)
-
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-    env["HTTP_USER_AGENT"] = "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)"
-    env["HTTP_X_REQUESTED_WITH"] = "XmlHttpRequest"
-
-    ware = ResponseBank::Middleware.new(method(:already_cached_app))
-    result = ware.call(env)
-    headers = result[1]
-
-    assert(env['cacheable.cache'])
-    assert(!env['cacheable.miss'])
-    assert_equal('server', env['cacheable.store'])
-    assert_equal('"etag_value"', headers['ETag'])
-    assert_equal("-1", headers['Expires'])
-  end
 end

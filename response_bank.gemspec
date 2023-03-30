@@ -19,7 +19,6 @@ Gem::Specification.new do |s|
 
   s.metadata["allowed_push_host"] = "https://rubygems.org"
 
-  s.add_runtime_dependency("useragent")
   s.add_runtime_dependency("msgpack")
 
   s.add_development_dependency("minitest", ">= 5.18.0")

@@ -3,7 +3,6 @@ PATH
   specs:
     response_bank (1.2.0)
       msgpack
-      useragent
 
 GEM
   remote: https://rubygems.org/
@@ -100,7 +99,7 @@ GEM
     minitest (5.18.0)
     mocha (2.0.2)
       ruby2_keywords (>= 0.0.5)
-    msgpack (1.6.1)
+    msgpack (1.7.0)
     net-imap (0.3.4)
       date
       net-protocol
@@ -176,7 +175,6 @@ GEM
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
     unicode-display_width (2.4.2)
-    useragent (0.16.10)
     websocket-driver (0.7.5)
       websocket-extensions (>= 0.1.0)
     websocket-extensions (0.1.5)
