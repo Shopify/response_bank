@@ -177,7 +177,7 @@ class ResponseCacheHandlerTest < Minitest::Test
   def test_serve_unversioned_cacheable_entry
     assert(@controller.respond_to?(:serve_unversioned_cacheable_entry?, true))
     @controller.expects(:serve_unversioned_cacheable_entry?).returns(true).times(1)
-    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry)
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(false))
     expect_page_rendered(page)
     assert_cache_miss(false, 'server')
   end

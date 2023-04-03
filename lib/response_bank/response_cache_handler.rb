@@ -84,7 +84,7 @@ module ResponseBank
       response = serve_from_browser_cache(entity_tag_hash, @env['HTTP_IF_NONE_MATCH'])
       return response if response
 
-      response = serve_from_cache(cache_key_hash, entity_tag_hash, @cache_age_tolerance)
+      response = serve_from_cache(cache_key_hash, @serve_unversioned ? "*" : entity_tag_hash, @cache_age_tolerance)
       return response if response
 
       # No cache hit; this request cannot be handled from cache.
