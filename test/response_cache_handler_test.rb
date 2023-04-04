@@ -7,6 +7,7 @@ class ResponseCacheHandlerTest < Minitest::Test
   def setup
     @cache_store = stub.tap { |s| s.stubs(read: nil) }
     controller.request.env['HTTP_IF_NONE_MATCH'] = '"should-not-match"'
+    controller.request.env['response_bank.server_cache_encoding'] = 'br'
     ResponseBank.stubs(:acquire_lock).returns(true)
   end
 
@@ -28,13 +29,13 @@ class ResponseCacheHandlerTest < Minitest::Test
     )
   end
 
-  def page(cache_hit = true)
+  def page(cache_hit = true, compression="br")
     etag = cache_hit ? handler.entity_tag_hash : "not-cached"
-    [200, {"Content-Type" => "text/html", "ETag" => etag}, ResponseBank.compress("<body>cached output</body>"), 1331765506]
+    [200, {"Content-Type" => "text/html", "ETag" => etag, "Content-Encoding" => compression}, ResponseBank.compress("<body>cached output</body>", compression), 1331765506]
   end
 
-  def page_cache_entry(cache_hit = true)
-    MessagePack.dump(page(cache_hit))
+  def page_cache_entry(cache_hit = true, compression="br")
+    MessagePack.dump(page(cache_hit, compression))
   end
 
   def page_uncompressed(cache_hit = true)
@@ -106,23 +107,26 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert_cache_miss(true, nil)
   end
 
-  def test_server_cache_hit
-    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry)
-    expect_page_rendered(page_uncompressed, false)
+  def test_server_cache_hit_return_uncompressed
+    controller.request.env['response_bank.server_cache_encoding'] = 'br'
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
+    expect_page_rendered(page_uncompressed, nil)
     assert_cache_miss(false, 'server')
   end
 
   def test_server_cache_hit_support_gzip
-    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry)
-    expect_page_rendered(page(true))
+    controller.request.env['response_bank.server_cache_encoding'] = 'gzip'
+
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'gzip'))
+    expect_page_rendered(page, 'gzip')
     assert_cache_miss(false, 'server')
   end
 
   def test_server_recent_cache_hit
     @controller.stubs(:cache_age_tolerance_in_seconds).returns(999999999999)
-    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(false))
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(false, 'br'))
     ResponseBank.expects(:acquire_lock).with(handler.entity_tag_hash)
-    expect_page_rendered(page(false))
+    expect_page_rendered(page(false), 'br')
 
     assert_cache_miss(false, 'server')
   end
@@ -154,7 +158,6 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert_cache_miss(true, 'server')
   end
 
-
   def test_recent_cache_available_but_not_acceptable
     ResponseBank.stubs(:acquire_lock).returns(false)
     @controller.stubs(:cache_age_tolerance_in_seconds).returns(15)
@@ -178,7 +181,7 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert(@controller.respond_to?(:serve_unversioned_cacheable_entry?, true))
     @controller.expects(:serve_unversioned_cacheable_entry?).returns(true).times(1)
     @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(false))
-    expect_page_rendered(page)
+    expect_page_rendered(page, 'br')
     assert_cache_miss(false, 'server')
   end
 
@@ -212,18 +215,18 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert_equal(unversioned_cache_key, controller.request.env['cacheable.unversioned-key'])
   end
 
-  def expect_page_rendered(cache_entry, compressed_body = true)
-    controller.request.env['gzip'] = compressed_body
+  def expect_page_rendered(cache_entry, content_encoding = 'br')
+    controller.request.env['HTTP_ACCEPT_ENCODING'] = content_encoding
 
     _status, _headers, _body, _timestamp = cache_entry
-    ResponseBank.expects(:decompress).never if compressed_body
-    ResponseBank.expects(:decompress).returns(_body).once unless compressed_body
+    ResponseBank.expects(:decompress).never if content_encoding
+    ResponseBank.expects(:decompress).returns(_body).once unless content_encoding
 
     status, headers, body = handler.run!
 
-    assert_equal(status, _status)
-    assert_equal(headers["Content-Type"], _headers['Content-Type'])
-    assert_equal(headers["Content-Encoding"], "gzip") if compressed_body
+    assert_equal(_status, status)
+    assert_equal(_headers['Content-Type'], headers["Content-Type"])
+    assert_equal(content_encoding, headers["Content-Encoding"]) if content_encoding
 
     body
   end

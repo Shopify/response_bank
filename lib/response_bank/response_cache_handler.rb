@@ -55,7 +55,7 @@ module ResponseBank
     private
 
     def hash(key)
-      "cacheable:#{Digest::MD5.hexdigest(key)}"
+      "cacheable:" + Digest::MD5.hexdigest(key)
     end
 
     def entity_tag
@@ -63,7 +63,7 @@ module ResponseBank
     end
 
     def cache_key
-      @cache_key ||= ResponseBank.cache_key_for(key: @key_data, key_schema_version: @key_schema_version)
+      @cache_key ||= ResponseBank.cache_key_for(key: @key_data, key_schema_version: @key_schema_version, encoding: @env['response_bank.server_cache_encoding'])
     end
 
     def cacheable_info_dump
@@ -143,16 +143,17 @@ module ResponseBank
         # version check
         # unversioned but tolerance threshold
         # regen
-        @headers = @headers.merge(headers)
+        @headers.merge!(headers)
 
-        if @env["gzip"]
-          @headers['Content-Encoding'] = "gzip"
-        else
-          # we have to uncompress because the client doesn't support gzip
-          ResponseBank.log("uncompressing for client without gzip")
-          body = ResponseBank.decompress(body)
+        # if a cache key hit and client doesn't match encoding, return the raw body
+        if !@env['HTTP_ACCEPT_ENCODING'].to_s.include?(@headers['Content-Encoding'])
+          ResponseBank.log("uncompressing payload for client as client doesn't require encoding")
+          body = ResponseBank.decompress(body, @headers['Content-Encoding'])
+          @headers.delete('Content-Encoding')
         end
+
         [status, @headers, [body]]
+
       end
     end
 

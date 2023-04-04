@@ -98,6 +98,9 @@ class MiddlewareTest < Minitest::Test
   def setup
     @original_cache_store = ResponseBank.cache_store
     ResponseBank.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
+
+    @env = Rack::MockRequest.env_for("http://example.com/index.html")
+    @env['HTTP_ACCEPT_ENCODING'] = 'deflate, gzip, br'
   end
 
   def teardown
@@ -105,10 +108,8 @@ class MiddlewareTest < Minitest::Test
   end
 
   def test_cache_miss_and_ignore
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-
     ware = ResponseBank::Middleware.new(method(:app))
-    result = ware.call(env)
+    result = ware.call(@env)
     headers = result[1]
 
     assert_nil(headers['ETag'])
@@ -117,10 +118,8 @@ class MiddlewareTest < Minitest::Test
   def test_cache_miss_and_not_found
     ResponseBank.cache_store.expects(:write).once
 
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-
     ware = ResponseBank::Middleware.new(method(:not_found))
-    result = ware.call(env)
+    result = ware.call(@env)
 
     headers = result[1]
     assert_equal('"etag_value"', headers['ETag'])
@@ -129,10 +128,8 @@ class MiddlewareTest < Minitest::Test
   def test_cache_hit_and_moved
     ResponseBank.cache_store.expects(:write).never
 
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-
     ware = ResponseBank::Middleware.new(method(:cached_moved))
-    result = ware.call(env)
+    result = ware.call(@env)
     headers = result[1]
 
     assert_equal('"etag_value"',headers['ETag'])
@@ -142,36 +139,42 @@ class MiddlewareTest < Minitest::Test
   def test_cache_miss_and_moved
     ResponseBank.cache_store.expects(:write).once
 
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
     ware = ResponseBank::Middleware.new(method(:moved))
-    result = ware.call(env)
+    result = ware.call(@env)
     headers = result[1]
 
     assert_equal('"etag_value"', headers['ETag'])
     assert_equal('http://shopify.com', headers['Location'])
+    assert(!headers['Content-Encoding'])
   end
 
   def test_cache_miss_and_store_limited_headers
     ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
     ResponseBank.cache_store.expects(:write).with(
       '"cacheable_app_limit_headers_cache_key"',
-        MessagePack.dump([200, {'Content-Type' => 'text/plain', 'ETag' => '"etag_value"', 'Cache-Tags' => 'tag1, tag2'}, ResponseBank.compress('Hi'), 424242]),
+        MessagePack.dump(
+          [
+            200,
+            {'Content-Type' => 'text/plain', 'ETag' => '"etag_value"', 'Content-Encoding' => 'br', 'Cache-Tags' => 'tag1, tag2'},
+            ResponseBank.compress('Hi', 'br'),
+            424242
+          ]
+        ),
         raw: true,
         expires_in: nil,
     ).once
-
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
+    @env['HTTP_ACCEPT_ENCODING'] = 'deflate, pkzip'
 
     ware = ResponseBank::Middleware.new(method(:cacheable_app_limit_headers))
-    result = ware.call(env)
+    result = ware.call(@env)
     headers = result[1]
 
-    assert(env['cacheable.cache'])
-    assert(env['cacheable.miss'])
+    assert(@env['cacheable.cache'])
+    assert(@env['cacheable.miss'])
 
     assert_equal('"etag_value"', headers['ETag'])
     assert_equal('miss', headers['X-Cache'])
-    assert_nil(env['cacheable.store'])
+    assert_nil(@env['cacheable.store'])
 
     # no gzip support here
     assert(!headers['Content-Encoding'])
@@ -181,36 +184,34 @@ class MiddlewareTest < Minitest::Test
     ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
     ResponseBank.cache_store.expects(:write).with(
       '"cacheable_app_cache_key"',
-        MessagePack.dump([200, {'Content-Type' => 'text/plain', 'ETag' => '"etag_value"' }, ResponseBank.compress('Hi'), 424242]),
+        MessagePack.dump([200, {'Content-Type' => 'text/plain', 'ETag' => '"etag_value"', 'Content-Encoding' => 'br' }, ResponseBank.compress('Hi', 'br'), 424242]),
         raw: true,
         expires_in: nil,
     ).once
-
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
+    @env['HTTP_ACCEPT_ENCODING'] = 'deflate, pkzip'
 
     ware = ResponseBank::Middleware.new(method(:cacheable_app))
-    result = ware.call(env)
+    result = ware.call(@env)
     headers = result[1]
 
-    assert(env['cacheable.cache'])
-    assert(env['cacheable.miss'])
+    assert(@env['cacheable.cache'])
+    assert(@env['cacheable.miss'])
 
     assert_equal('"etag_value"', headers['ETag'])
     assert_equal('miss', headers['X-Cache'])
-    assert_nil(env['cacheable.store'])
+    assert_nil(@env['cacheable.store'])
 
     # no gzip support here
     assert(!headers['Content-Encoding'])
   end
 
   def test_cache_miss_and_store_with_shortened_cache_expiry
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-    env['cacheable.versioned-cache-expiry'] = 30.seconds
+    @env['cacheable.versioned-cache-expiry'] = 30.seconds
 
     ResponseBank.cache_store.expects(:write).with('"cacheable_app_with_unversioned_cache_key"', anything, has_entries(expires_in: 30.seconds))
 
     ware = ResponseBank::Middleware.new(method(:cacheable_app_with_unversioned))
-    result = ware.call(env)
+    result = ware.call(@env)
 
     headers = result[1]
     assert_equal('"etag_value"', headers['ETag'])
@@ -221,23 +222,20 @@ class MiddlewareTest < Minitest::Test
     ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
     ResponseBank.cache_store.expects(:write).with(
       '"moved_cache_key"',
-        MessagePack.dump([301, {'Location' => 'http://shopify.com', 'Content-Type' => 'text/plain', 'ETag' => '"etag_value"'}, ResponseBank.compress(''), 424242]),
+        MessagePack.dump([ 301, {'Location' => 'http://shopify.com', 'Content-Type' => 'text/plain', 'ETag' => '"etag_value"'}, nil, 424242 ]),
         raw: true,
         expires_in: nil,
     ).once
-
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-
     ware = ResponseBank::Middleware.new(method(:moved))
-    result = ware.call(env)
+    result = ware.call(@env)
     headers = result[1]
 
-    assert(env['cacheable.cache'])
-    assert(env['cacheable.miss'])
+    assert(@env['cacheable.cache'])
+    assert(@env['cacheable.miss'])
 
     assert_equal('"etag_value"', headers['ETag'])
     assert_equal('miss', headers['X-Cache'])
-    assert_nil(env['cacheable.store'])
+    assert_nil(@env['cacheable.store'])
 
     # no gzip support here
     assert(!headers['Content-Encoding'])
@@ -247,57 +245,79 @@ class MiddlewareTest < Minitest::Test
     ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
     ResponseBank.cache_store.expects(:write).with(
       '"cacheable_app_cache_key"',
-        MessagePack.dump([200, {'Content-Type' => 'text/plain', 'ETag' => '"etag_value"' }, ResponseBank.compress('Hi'), 424242]),
+        MessagePack.dump([200, {'Content-Type' => 'text/plain', 'ETag' => '"etag_value"', 'Content-Encoding' => 'gzip'}, ResponseBank.compress('Hi', 'gzip'), 424242]),
         raw: true,
         expires_in: nil,
     ).once
 
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-    env['HTTP_ACCEPT_ENCODING'] = 'deflate, gzip'
+    @env['HTTP_ACCEPT_ENCODING'] = 'deflate, gzip'
 
     ware = ResponseBank::Middleware.new(method(:cacheable_app))
-    result = ware.call(env)
+    result = ware.call(@env)
     headers = result[1]
 
-    assert(env['cacheable.cache'])
-    assert(env['cacheable.miss'])
+    assert(@env['cacheable.cache'])
+    assert(@env['cacheable.miss'])
 
     assert_equal('"etag_value"', headers['ETag'])
     assert_equal('miss', headers['X-Cache'])
-    assert_nil(env['cacheable.store'])
+    assert_nil(@env['cacheable.store'])
+
+    # gzip support
+    assert_equal('gzip', headers['Content-Encoding'])
+    assert_equal([ResponseBank.compress('Hi', 'gzip')], result[2])
+  end
+
+  def test_cache_miss_and_store_with_br_support
+    ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
+    ResponseBank.cache_store.expects(:write).with(
+      '"cacheable_app_cache_key"',
+        MessagePack.dump([200, {'Content-Type' => 'text/plain', 'ETag' => '"etag_value"', 'Content-Encoding' => 'br' }, ResponseBank.compress('Hi', 'br'), 424242]),
+        raw: true,
+        expires_in: nil,
+    ).once
+
+    @env['HTTP_ACCEPT_ENCODING'] = 'deflate, br, gzip'
+
+    ware = ResponseBank::Middleware.new(method(:cacheable_app))
+    result = ware.call(@env)
+    headers = result[1]
+
+    assert(@env['cacheable.cache'])
+    assert(@env['cacheable.miss'])
+
+    assert_equal('"etag_value"', headers['ETag'])
+    assert_equal('miss', headers['X-Cache'])
+    assert_nil(@env['cacheable.store'])
 
     # gzip support!
-    assert_equal('gzip', headers['Content-Encoding'])
-    assert_equal([ResponseBank.compress("Hi")], result[2])
+    assert_equal('br', headers['Content-Encoding'])
+    assert_equal([ResponseBank.compress("Hi", 'br')], result[2])
   end
 
   def test_cache_hit_server
     ResponseBank.cache_store.expects(:write).times(0)
 
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-
     ware = ResponseBank::Middleware.new(method(:already_cached_app))
-    result = ware.call(env)
+    result = ware.call(@env)
     headers = result[1]
 
-    assert(env['cacheable.cache'])
-    assert(!env['cacheable.miss'])
-    assert_equal('server', env['cacheable.store'])
+    assert(@env['cacheable.cache'])
+    assert(!@env['cacheable.miss'])
+    assert_equal('server', @env['cacheable.store'])
     assert_equal('"etag_value"', headers['ETag'])
   end
 
   def test_cache_hit_client
     ResponseBank.cache_store.expects(:write).times(0)
 
-    env = Rack::MockRequest.env_for("http://example.com/index.html")
-
     ware = ResponseBank::Middleware.new(method(:client_hit_app))
-    result = ware.call(env)
+    result = ware.call(@env)
     headers = result[1]
 
-    assert(env['cacheable.cache'])
-    assert(!env['cacheable.miss'])
-    assert_equal('client', env['cacheable.store'])
+    assert(@env['cacheable.cache'])
+    assert(!@env['cacheable.miss'])
+    assert_equal('client', @env['cacheable.store'])
     assert_equal('"etag_value"', headers['ETag'])
   end
 end
