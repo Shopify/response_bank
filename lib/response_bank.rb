@@ -64,7 +64,7 @@ module ResponseBank
         key = %{#{key}:#{hash_value_str(data[:version])}} if data[:version]
 
         # add the encoding to only the cache key but don't expose this detail in the entity_tag
-        key = %{#{key}:#{hash_value_str(data[:encoding])}} if data[:encoding] && data[:encoding] != "gzip"
+        key = %{#{key}:#{hash_value_str(data[:encoding])}} if data[:encoding]
 
         key
       when Array
