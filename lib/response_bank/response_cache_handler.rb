@@ -145,7 +145,7 @@ module ResponseBank
         # regen
         @headers.merge!(headers)
 
-        if @headers['Content-Encoding'].nil?
+        unless @headers['Content-Encoding']
           ResponseBank.log("Cache hit, but missing content-encoding in the cache value headers")
           return
         end
