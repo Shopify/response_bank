@@ -48,7 +48,12 @@ def cacheable_app(env)
   env['cacheable.key']   = '"etag_value"'
   env['cacheable.unversioned-key'] = '"cacheable_app_cache_key"'
 
-  body = block_given? ? [yield] : ['Hi']
+  body = if block_given?
+    yield.respond_to?(:each) ? yield : [yield]
+  else
+    ['Hi']
+  end
+
   [200, { 'Content-Type' => 'text/plain' }, body]
 end
 
@@ -319,5 +324,40 @@ class MiddlewareTest < Minitest::Test
     assert(!@env['cacheable.miss'])
     assert_equal('client', @env['cacheable.store'])
     assert_equal('"etag_value"', headers['ETag'])
+  end
+
+  def test_cache_miss_and_store_with_gzip_support_async
+    ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
+    ResponseBank.cache_store.expects(:write).with(
+      '"cacheable_app_cache_key"',
+        MessagePack.dump([200, {'Content-Type' => 'text/plain', 'ETag' => '"etag_value"', 'Content-Encoding' => 'gzip'}, ResponseBank.compress('HelloWorld', 'gzip'), 424242]),
+        raw: true,
+        expires_in: nil,
+    ).once
+
+    @env['HTTP_ACCEPT_ENCODING'] = 'deflate, gzip'
+
+    body = ['Hello', 'World']
+    app = ->(env) { cacheable_app(env) { body } }
+    ware = ResponseBank::Middleware.new(app, async: true)
+    result = ware.call(@env)
+    headers = result[1]
+
+    assert(@env['cacheable.cache'])
+    assert(@env['cacheable.miss'])
+
+    assert_equal('"etag_value"', headers['ETag'])
+    assert_equal('miss', headers['X-Cache'])
+    assert_nil(@env['cacheable.store'])
+
+    # gzip support
+    assert_equal('gzip', headers['Content-Encoding'])
+
+    results = []
+    result[2].each { |part| results << part }
+
+    # Size of body chunks are double because we flush after writing each chunk
+    assert_equal(body.size * 2, results.size)
+    assert_equal(body.join, ResponseBank.decompress(results.join, 'gzip'))
   end
 end

@@ -41,6 +41,17 @@ module ResponseBank
       end
     end
 
+    def compress_stream(content, encoding = "gzip", &block)
+      case encoding
+      when 'gzip'
+        GzipStream.new(content, block)
+      # when 'br'
+      #   Brotli.deflate(content, mode: :text, quality: 7)
+      else
+        raise ArgumentError, "Unsupported encoding: #{encoding}"
+      end
+    end
+
     def decompress(content, encoding = "gzip")
       case encoding
       when 'gzip'
@@ -99,6 +110,41 @@ module ResponseBank
       else
         data.to_s
       end
+    end
+  end
+
+  class GzipStream
+    def initialize(body, on_close)
+      @body = body
+      @on_close = on_close
+      @parts = []
+    end
+
+    # Yield gzip compressed strings to the given block.
+    def each(&block)
+      @writer = block
+      gzip = ::Zlib::GzipWriter.new(self, level: Zlib::BEST_COMPRESSION)
+      @body.each { |part|
+        # Skip empty strings, as they would result in no output,
+        # and flushing empty parts would raise Zlib::BufError.
+        next if part.empty?
+        gzip.write(part)
+        gzip.flush
+        @parts << part
+      }
+    ensure
+      @on_close.call(Zlib.gzip(@parts.join, level: Zlib::BEST_COMPRESSION)) if @on_close
+      gzip.finish
+    end
+
+    # Call the block passed to #each with the gzipped data.
+    def write(data)
+      @writer.call(data)
+    end
+
+    # Close the original body if possible.
+    def close
+      @body.close if @body.respond_to?(:close)
     end
   end
 end

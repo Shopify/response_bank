@@ -10,8 +10,9 @@ module ResponseBank
     ACCEPT = "HTTP_ACCEPT"
     USER_AGENT = "HTTP_USER_AGENT"
 
-    def initialize(app)
+    def initialize(app, options = {})
       @app = app
+      @options = options
     end
 
     def call(env)
@@ -23,43 +24,37 @@ module ResponseBank
       if env['cacheable.cache']
         if [200, 404, 301, 304].include?(status)
           headers['ETag'] = env['cacheable.key']
-
         end
 
         if [200, 404, 301].include?(status) && env['cacheable.miss']
-          # Flatten down the result so that it can be stored to memcached.
-          if body.is_a?(String)
-            body_string = body
-          else
-            body_string = +""
-            body.each { |part| body_string << part }
-          end
-
-          body_compressed = nil
-          if body_string && body_string != ""
+          if @options[:async]
             headers['Content-Encoding'] = content_encoding
-            body_compressed = ResponseBank.compress(body_string, content_encoding)
-          end
+            body_compressed = ResponseBank.compress_stream(body, content_encoding) do |compressed|
+              store_result!(env, headers, status, compressed)
+            end
+          else
+            # Flatten down the result so that it can be stored to memcached.
+            if body.is_a?(String)
+              body_string = body
+            else
+              body_string = +""
+              body.each { |part| body_string << part }
+            end
 
-          cached_headers = headers.slice(*CACHEABLE_HEADERS)
-          # Store result
-          cache_data = [status, cached_headers, body_compressed, timestamp]
+            body_compressed = nil
+            if body_string && body_string != ""
+              headers['Content-Encoding'] = content_encoding
+              body_compressed = ResponseBank.compress(body_string, content_encoding)
+            end
 
-          ResponseBank.write_to_cache(env['cacheable.key']) do
-            payload = MessagePack.dump(cache_data)
-            ResponseBank.write_to_backing_cache_store(
-              env,
-              env['cacheable.unversioned-key'],
-              payload,
-              expires_in: env['cacheable.versioned-cache-expiry'],
-            )
+            store_result!(env, headers, status, body_compressed)
           end
 
           # since we had to generate the compressed version already we may
           # as well serve it if the client wants it
           if body_compressed
             if env['HTTP_ACCEPT_ENCODING'].to_s.include?(content_encoding)
-              body = [body_compressed]
+              body = body_compressed.respond_to?(:each) ? body_compressed : [body_compressed]
             else
               # Remove content-encoding header for response with compressed content
               headers.delete('Content-Encoding')
@@ -83,5 +78,19 @@ module ResponseBank
       Time.now.to_i
     end
 
+    def store_result!(env, headers, status, body_compressed)
+      cached_headers = headers.slice(*CACHEABLE_HEADERS)
+      cache_data = [status, cached_headers, body_compressed, timestamp]
+
+      ResponseBank.write_to_cache(env['cacheable.key']) do
+        payload = MessagePack.dump(cache_data)
+        ResponseBank.write_to_backing_cache_store(
+          env,
+          env['cacheable.unversioned-key'],
+          payload,
+          expires_in: env['cacheable.versioned-cache-expiry'],
+        )
+      end
+    end
   end
 end
