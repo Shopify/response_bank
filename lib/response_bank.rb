@@ -44,9 +44,9 @@ module ResponseBank
     def compress_stream(content, encoding = "gzip", &block)
       case encoding
       when 'gzip'
-        GzipStream.new(content, block)
-      # when 'br'
-      #   Brotli.deflate(content, mode: :text, quality: 7)
+        GzipStream.new(content, block, level: Zlib::BEST_COMPRESSION)
+      when 'br'
+        BrotliStream.new(content, block, mode: :text, quality: 7)
       else
         raise ArgumentError, "Unsupported encoding: #{encoding}"
       end
@@ -113,17 +113,19 @@ module ResponseBank
     end
   end
 
+  # Borrowed from: https://github.com/rack/rack/blob/main/lib/rack/deflater.rb
   class GzipStream
-    def initialize(body, on_close)
+    def initialize(body, after, options)
       @body = body
-      @on_close = on_close
+      @after = after
+      @options = options
       @parts = []
     end
 
     # Yield gzip compressed strings to the given block.
     def each(&block)
       @writer = block
-      gzip = ::Zlib::GzipWriter.new(self, level: Zlib::BEST_COMPRESSION)
+      gzip = ::Zlib::GzipWriter.new(self, @options)
       @body.each { |part|
         # Skip empty strings, as they would result in no output,
         # and flushing empty parts would raise Zlib::BufError.
@@ -133,7 +135,7 @@ module ResponseBank
         @parts << part
       }
     ensure
-      @on_close.call(Zlib.gzip(@parts.join, level: Zlib::BEST_COMPRESSION)) if @on_close
+      @after.call(Zlib.gzip(@parts.join, @options)) if @after
       gzip.finish
     end
 
@@ -143,6 +145,37 @@ module ResponseBank
     end
 
     # Close the original body if possible.
+    def close
+      @body.close if @body.respond_to?(:close)
+    end
+  end
+
+  # Borrowed from: https://github.com/marcotc/rack-brotli/blob/master/lib/rack/brotli/deflater.rb
+  class BrotliStream
+    def initialize(body, after, options)
+      @body = body
+      @after = after
+      @options = options
+      @parts = []
+    end
+
+    def each(&block)
+      @writer = block
+      buffer = String.new
+      @body.each { |part|
+        next if part.empty?
+        @parts << part
+        buffer << part
+      }
+
+      # Note: Brotli.deflate does not support streaming, so we buffer all the body chunks here.
+      # However, since this happens within `#each`, things like header flushing are not blocked.
+      yield ::Brotli.deflate(buffer, @options)
+    ensure
+      @after.call(::Brotli.deflate(@parts.join, @options)) if @after
+      @writer = nil
+    end
+
     def close
       @body.close if @body.respond_to?(:close)
     end
