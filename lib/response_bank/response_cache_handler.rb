@@ -145,6 +145,11 @@ module ResponseBank
         # regen
         @headers.merge!(headers)
 
+        unless @headers['Content-Encoding']
+          ResponseBank.log("Cache hit, but missing content-encoding in the cache value headers")
+          return
+        end
+
         # if a cache key hit and client doesn't match encoding, return the raw body
         if !@env['HTTP_ACCEPT_ENCODING'].to_s.include?(@headers['Content-Encoding'])
           ResponseBank.log("uncompressing payload for client as client doesn't require encoding")
