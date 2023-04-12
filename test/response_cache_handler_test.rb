@@ -110,7 +110,8 @@ class ResponseCacheHandlerTest < Minitest::Test
   def test_server_cache_hit_return_uncompressed
     controller.request.env['response_bank.server_cache_encoding'] = 'br'
     @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
-    expect_page_rendered(page_uncompressed, nil)
+    page_decompressed = [200, {"Content-Type" => "text/html", "ETag" => handler.entity_tag_hash, "Content-Encoding" => 'br'}, "<body>cached output</body>", 1331765506]
+    expect_page_rendered(page_decompressed, nil)
     assert_cache_miss(false, 'server')
   end
 
@@ -133,9 +134,19 @@ class ResponseCacheHandlerTest < Minitest::Test
 
   def test_server_cache_hit_support_gzip
     controller.request.env['response_bank.server_cache_encoding'] = 'gzip'
+    cache_entry = [200, {"Content-Type" => "text/html", "ETag" => handler.entity_tag_hash, "Content-Encoding" => 'br'}, "<body>cached output</body>", 1331765506]
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(MessagePack.dump(cache_entry))
+    controller.request.env['HTTP_ACCEPT_ENCODING'] = 'gzip'
 
-    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'gzip'))
-    expect_page_rendered(page, 'gzip')
+    _status, _headers, _body, _timestamp = cache_entry
+
+    ResponseBank.expects(:decompress).returns(_body).once
+
+    status, headers, body = handler.run!
+
+    assert_equal(_status, status)
+    assert_equal(_headers['Content-Type'], headers["Content-Type"])
+    assert_nil(headers["Content-Encoding"])
     assert_cache_miss(false, 'server')
   end
 
@@ -237,14 +248,13 @@ class ResponseCacheHandlerTest < Minitest::Test
 
     _status, _headers, _body, _timestamp = cache_entry
 
-    if content_encoding.nil? ||
-      _body.nil? ||
-      _body.empty? ||
-      _headers['Content-Encoding'].nil? ||
+    if !_body.nil? &&
+      !_body.empty? &&
+      !_headers['Content-Encoding'].nil? &&
       !content_encoding.to_s.include?(_headers['Content-Encoding'])
-      ResponseBank.expects(:decompress).never
-    else
       ResponseBank.expects(:decompress).returns(_body).once
+    else
+      ResponseBank.expects(:decompress).never
     end
 
     status, headers, body = handler.run!

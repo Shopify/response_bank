@@ -110,6 +110,7 @@ module ResponseBank
       raw = ResponseBank.read_from_backing_cache_store(@env, cache_key_hash, backing_cache_store: @cache_store)
 
       if raw
+
         hit = MessagePack.load(raw)
 
         @env['cacheable.miss']  = false
@@ -147,16 +148,14 @@ module ResponseBank
 
         if @headers['Content-Encoding'].nil?
           unless body.nil? || body.empty?
-            puts "Cache hit, but missing content-encoding in the cache value headers"
             ResponseBank.log("Cache hit, but missing content-encoding in the cache value headers")
           else
-            puts "Cache hit, but empty body"
             ResponseBank.log("Cache hit, but empty body")
           end
         end
 
         # if a cache key hit and client doesn't match encoding, return the raw body
-        if !body.nil? && !body.empty? && !@headers['Content-Encoding'] && !@env['HTTP_ACCEPT_ENCODING'].to_s.include?(@headers['Content-Encoding'])
+        if !body.nil? && !body.empty? && !@headers['Content-Encoding'].nil? && !@env['HTTP_ACCEPT_ENCODING'].to_s.include?(@headers['Content-Encoding'])
           ResponseBank.log("uncompressing payload for client as client doesn't require encoding")
           body = ResponseBank.decompress(body, @headers['Content-Encoding'])
           @headers.delete('Content-Encoding')
