@@ -27,6 +27,8 @@ module ResponseBank
         end
 
         if [200, 404, 301].include?(status) && env['cacheable.miss']
+          body_compressed = nil
+
           if @options[:async]
             headers['Content-Encoding'] = content_encoding
             body_compressed = ResponseBank.compress_stream(body, content_encoding) do |compressed|
@@ -40,8 +42,6 @@ module ResponseBank
               body_string = +""
               body.each { |part| body_string << part }
             end
-
-            body_compressed = nil
             if body_string && body_string != ""
               headers['Content-Encoding'] = content_encoding
               body_compressed = ResponseBank.compress(body_string, content_encoding)
