@@ -123,7 +123,7 @@ module ResponseBank
         if match_entity_tag == "*"
           ResponseBank.log("Cache hit: server (unversioned)")
           # page tolerance only applies for versioned + etag mismatch
-        elsif etag_matches?(headers['ETag'], %{"#{match_entity_tag}"})
+        elsif etag_matches?(headers['ETag'], match_entity_tag)
           ResponseBank.log("Cache hit: server")
         else
           # cache miss; check to see if any parallel requests already are regenerating the cache
@@ -166,13 +166,19 @@ module ResponseBank
       # If-None-Match: "abc"
       # If-None-Match: W/"abc"
       # If-None-Match: "abc", "def"
-      # If-None-Match: "*"
+      # If-None-Match: *
       return false unless entity_tag
       return false unless if_none_match
 
+      return true if if_none_match == "*"
+
       # strictly speaking an unquoted etag is not valid, yet common
       # to avoid unintended greedy matches in we check for naked entity then includes with quoted entity values
-      if_none_match == "*" || if_none_match == entity_tag || if_none_match.include?(%{"#{entity_tag}"})
+      entity_tag = %{"#{entity_tag}"} unless entity_tag.starts_with?('"')
+
+      if_none_match = %{"#{if_none_match}"} unless if_none_match.starts_with?('"') || if_none_match.starts_with?('W/"')
+
+      if_none_match == entity_tag || if_none_match.include?(entity_tag)
     end
 
     def stale_while_revalidate?(timestamp, cache_age_tolerance)
