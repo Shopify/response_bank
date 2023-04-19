@@ -172,7 +172,7 @@ module ResponseBank
 
       # strictly speaking an unquoted etag is not valid, yet common
       # to avoid unintended greedy matches in we check for naked entity then includes with quoted entity values
-      if_none_match == '*' || if_none_match == entity_tag || if_none_match.include?(%{"#{entity_tag}"})
+      if_none_match == "*" || if_none_match == entity_tag || if_none_match.include?(%{"#{entity_tag}"})
     end
 
     def stale_while_revalidate?(timestamp, cache_age_tolerance)
