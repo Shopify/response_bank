@@ -31,7 +31,7 @@ class ResponseCacheHandlerTest < Minitest::Test
 
   def page(cache_hit = true, compression="br")
     etag = cache_hit ? handler.entity_tag_hash : "not-cached"
-    [200, {"Content-Type" => "text/html", "ETag" => etag, "Content-Encoding" => compression}, ResponseBank.compress("<body>cached output</body>", compression), 1331765506]
+    [200, {"Content-Type" => "text/html", "ETag" => %{"#{etag}"}, "Content-Encoding" => compression}, ResponseBank.compress("<body>cached output</body>", compression), 1331765506]
   end
 
   def page_cache_entry(cache_hit = true, compression="br")
@@ -40,7 +40,7 @@ class ResponseCacheHandlerTest < Minitest::Test
 
   def page_uncompressed(cache_hit = true)
     etag = cache_hit ? handler.entity_tag_hash : "not-cached"
-    [200, {"Content-Type" => "text/html", "ETag" => etag}, "<body>cached output</body>", 1331765506]
+    [200, {"Content-Type" => "text/html", "ETag" => %{"#{etag}"}}, "<body>cached output</body>", 1331765506]
   end
 
   def test_cache_miss_block_is_only_called_once_if_it_return_nil
