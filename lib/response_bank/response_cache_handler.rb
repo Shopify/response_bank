@@ -59,7 +59,7 @@ module ResponseBank
     end
 
     def entity_tag
-      @entity_tag ||= ResponseBank.cache_key_for(key: @key_data, version: @version_data, key_schema_version: @key_schema_version)
+      @entity_tag ||= ResponseBank.cache_key_for(key: @key_data, version: @version_data, key_schema_version: @key_schema_version, encoding: @env['response_bank.server_cache_encoding'])
     end
 
     def cache_key
