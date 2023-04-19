@@ -22,8 +22,7 @@ module ResponseBank
 
       if env['cacheable.cache']
         if [200, 404, 301, 304].include?(status)
-          headers['ETag'] = env['cacheable.key']
-
+          headers['ETag'] = %{"#{env['cacheable.key']}"}
         end
 
         if [200, 404, 301].include?(status) && env['cacheable.miss']
