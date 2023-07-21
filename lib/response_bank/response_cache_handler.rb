@@ -14,6 +14,7 @@ module ResponseBank
       headers:,
       force_refill_cache: false,
       cache_store: ResponseBank.cache_store,
+      node_local_locks: false,
       &block
     )
       @cache_miss_block = block
@@ -28,6 +29,7 @@ module ResponseBank
       @cache_store = cache_store
       @headers = headers || {}
       @key_schema_version = @env.key?('cacheable.key_version') ? @env.key['cacheable.key_version'] : CACHE_KEY_SCHEMA_VERSION
+      @node_local_locks = node_local_locks
     end
 
     def run!
@@ -127,7 +129,7 @@ module ResponseBank
           ResponseBank.log("Cache hit: server")
         else
           # cache miss; check to see if any parallel requests already are regenerating the cache
-          if ResponseBank.acquire_lock(match_entity_tag)
+          if ResponseBank.acquire_lock(match_entity_tag, @node_local_locks)
             # execute if we can get the lock
             @env['cacheable.locked'] = true
             return

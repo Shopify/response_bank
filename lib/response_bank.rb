@@ -14,11 +14,11 @@ module ResponseBank
       @logger.info("[ResponseBank] #{message}")
     end
 
-    def acquire_lock(_cache_key)
+    def acquire_lock(_cache_key, node_local_locks: false)
       raise NotImplementedError, "Override ResponseBank.acquire_lock in an initializer."
     end
 
-    def write_to_cache(_key)
+    def write_to_cache(_key, node_local_locks: false)
       yield
     end
 

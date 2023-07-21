@@ -17,6 +17,7 @@ module ResponseBank
     def call(env)
       env['cacheable.cache'] = false
       content_encoding = env['response_bank.server_cache_encoding'] = ResponseBank.check_encoding(env)
+      node_local_locks = env['node_local_page_locks_enabled'] || false
 
       status, headers, body = @app.call(env)
 
@@ -44,7 +45,7 @@ module ResponseBank
           # Store result
           cache_data = [status, cached_headers, body_compressed, timestamp]
 
-          ResponseBank.write_to_cache(env['cacheable.key']) do
+          ResponseBank.write_to_cache(env['cacheable.key'], node_local_locks) do
             payload = MessagePack.dump(cache_data)
             ResponseBank.write_to_backing_cache_store(
               env,
