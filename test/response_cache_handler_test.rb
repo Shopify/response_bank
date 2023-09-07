@@ -22,6 +22,7 @@ class ResponseCacheHandlerTest < Minitest::Test
       cache_store: @cache_store,
       env: controller.request.env,
       force_refill_cache: controller.send(:force_refill_cache?),
+      skip_browser_cache: controller.send(:skip_browser_cache?),
       serve_unversioned: controller.send(:serve_unversioned_cacheable_entry?),
       cache_age_tolerance: controller.send(:cache_age_tolerance_in_seconds),
       headers: controller.response.headers,
@@ -203,6 +204,18 @@ class ResponseCacheHandlerTest < Minitest::Test
     _, _, body = handler.run!
     assert_cache_miss(true, nil)
     assert_equal('dynamic output', body)
+  end
+
+  def test_skip_browser_cache_never_loads_from_browser
+    @controller.stubs(skip_browser_cache?: true)
+    @controller.expects(:serve_from_browser_cache).never
+    controller.request.env['response_bank.server_cache_encoding'] = 'br'
+    controller.request.env['HTTP_IF_NONE_MATCH'] = handler.entity_tag_hash
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
+
+    page_decompressed = [200, {"Content-Type" => "text/html", "ETag" => handler.entity_tag_hash, "Content-Encoding" => 'br'}, "<body>cached output</body>", 1331765506]
+    expect_page_rendered(page_decompressed, nil)
+    assert_cache_miss(false, 'server')
   end
 
   def test_serve_unversioned_cacheable_entry

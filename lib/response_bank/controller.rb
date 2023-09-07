@@ -21,6 +21,10 @@ module ResponseBank
       params[:fill_cache] == "true"
     end
 
+    def skip_browser_cache?
+      false
+    end
+
     def serve_unversioned_cacheable_entry?
       false
     end
@@ -48,6 +52,7 @@ module ResponseBank
         cache_age_tolerance: cache_age_tolerance_in_seconds,
         serve_unversioned: serve_unversioned_cacheable_entry?,
         force_refill_cache: force_refill_cache?,
+        skip_browser_cache: skip_browser_cache?,
         headers: response.headers,
         &block
       )
