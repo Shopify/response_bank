@@ -13,6 +13,7 @@ module ResponseBank
       serve_unversioned:,
       headers:,
       force_refill_cache: false,
+      skip_browser_cache: false,
       cache_store: ResponseBank.cache_store,
       &block
     )
@@ -25,6 +26,7 @@ module ResponseBank
 
       @serve_unversioned = serve_unversioned
       @force_refill_cache = force_refill_cache
+      @skip_browser_cache = skip_browser_cache
       @cache_store = cache_store
       @headers = headers || {}
       @key_schema_version = @env.key?('cacheable.key_version') ? @env.key['cacheable.key_version'] : CACHE_KEY_SCHEMA_VERSION
@@ -81,8 +83,10 @@ module ResponseBank
 
     def try_to_serve_from_cache
       # Etag
-      response = serve_from_browser_cache(entity_tag_hash, @env['HTTP_IF_NONE_MATCH'])
-      return response if response
+      unless @skip_browser_cache
+        response = serve_from_browser_cache(entity_tag_hash, @env['HTTP_IF_NONE_MATCH'])
+        return response if response
+      end
 
       response = serve_from_cache(cache_key_hash, @serve_unversioned ? "*" : entity_tag_hash, @cache_age_tolerance)
       return response if response
