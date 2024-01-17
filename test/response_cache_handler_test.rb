@@ -125,7 +125,7 @@ class ResponseCacheHandlerTest < Minitest::Test
     _status, _headers, _body, _timestamp = empty_page
     ResponseBank.expects(:decompress).never
 
-    status, headers, body = handler.run!
+    status, headers, _body = handler.run!
 
     assert_equal(_status, status)
     assert_equal(_headers['Content-Type'], headers["Content-Type"])
@@ -143,7 +143,7 @@ class ResponseCacheHandlerTest < Minitest::Test
 
     ResponseBank.expects(:decompress).returns(_body).once
 
-    status, headers, body = handler.run!
+    status, headers, _body = handler.run!
 
     assert_equal(_status, status)
     assert_equal(_headers['Content-Type'], headers["Content-Type"])

@@ -67,4 +67,20 @@ class ResponseBankTest < Minitest::Test
   def test_cache_key_for_date
     assert_equal("2020-01-01", ResponseBank.cache_key_for(Date.new(2020, 1, 1)))
   end
+
+  def test_compress_retries_once_on_zlib_buferror
+    content = 'mycontent'
+    compressed_content = Zlib.gzip(content, level: Zlib::BEST_COMPRESSION)
+    Zlib.stubs(:gzip).raises(Zlib::BufError).then.returns(compressed_content)
+
+    assert_equal(compressed_content, ResponseBank.compress(content, "gzip"))
+  end
+
+  def test_compress_retries_once_on_zlib_buferror_and_raises_if_it_happens_again
+    Zlib.stubs(:gzip).raises(Zlib::BufError)
+
+    assert_raises(Zlib::BufError) do
+      ResponseBank.compress("mycontent", "gzip")
+    end
+  end
 end

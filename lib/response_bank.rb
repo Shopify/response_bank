@@ -33,7 +33,20 @@ module ResponseBank
     def compress(content, encoding = "br")
       case encoding
       when 'gzip'
-        Zlib.gzip(content, level: Zlib::BEST_COMPRESSION)
+        attempts = 0
+
+        begin
+          Zlib.gzip(content, level: Zlib::BEST_COMPRESSION)
+        rescue Zlib::BufError
+          # We get sporadic Zlib::BufError, so we retry once (https://github.com/ruby/zlib/issues/49)
+          attempts += 1
+
+          if attempts <= 1
+            retry
+          else
+            raise
+          end
+        end
       when 'br'
         Brotli.deflate(content, mode: :text, quality: 7)
       else
