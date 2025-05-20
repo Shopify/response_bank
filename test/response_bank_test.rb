@@ -18,18 +18,18 @@ class ResponseBankTest < Minitest::Test
   end
 
   def test_cache_key_for_handles_nested_everything_and_removes_hash_keys_with_nil_values
-    expected = %|bar,1,a,b,2,{:baz=>\"buzz\"},{:red=>[\"blue\", \"green\"], :day=>true, :night=>nil, :updated_at=>2011-06-29 15:47:47 UTC, :published_on=>Wed, 29 Jun 2011},text/html| # rubocop:disable Metrics/LineLength
+    expected = %|bar,1,a,b,2,{:baz=>"buzz"},{:red=>["blue", "green"], :day=>true, :night=>nil, :updated_at=>2011-06-29 15:47:47 UTC, :published_on=>Wed, 29 Jun 2011},text/html| # rubocop:disable Metrics/LineLength
     assert_equal(expected, ResponseBank.cache_key_for(key: @data))
   end
 
   def test_cache_key_with_no_key_key
-    expected = %|{:foo=>\"bar\", :bar=>[1, [\"a\", \"b\"], 2, {:baz=>\"buzz\"}], \"qux\"=>{:red=>[\"blue\", \"green\"], :day=>true, :night=>nil, :updated_at=>2011-06-29 15:47:47 UTC, :published_on=>Wed, 29 Jun 2011}}| # rubocop:disable Metrics/LineLength
+    expected = %|{:foo=>"bar", :bar=>[1, ["a", "b"], 2, {:baz=>"buzz"}], "qux"=>{:red=>["blue", "green"], :day=>true, :night=>nil, :updated_at=>2011-06-29 15:47:47 UTC, :published_on=>Wed, 29 Jun 2011}}| # rubocop:disable Metrics/LineLength
     assert_equal(expected, ResponseBank.cache_key_for(@data.tap { |h| h.delete(:format) }))
   end
 
   def test_cache_key_with_key_and_version
     version = { version: 42 }
-    expected = %|bar,1,a,b,2,{:baz=>\"buzz\"},{:red=>[\"blue\", \"green\"], :day=>true, :night=>nil, :updated_at=>2011-06-29 15:47:47 UTC, :published_on=>Wed, 29 Jun 2011},text/html:42| # rubocop:disable Metrics/LineLength
+    expected = %|bar,1,a,b,2,{:baz=>"buzz"},{:red=>["blue", "green"], :day=>true, :night=>nil, :updated_at=>2011-06-29 15:47:47 UTC, :published_on=>Wed, 29 Jun 2011},text/html:42| # rubocop:disable Metrics/LineLength
     assert_equal(expected, ResponseBank.cache_key_for(key: @data, version: version))
   end
 
