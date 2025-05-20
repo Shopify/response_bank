@@ -6,7 +6,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: [ '3.3' ]
+        ruby: [ '3.3', '3.4' ]
         actionpack: [ '7.2', '8.0', 'edge' ]
 
     env:
