@@ -49,7 +49,7 @@ def cached_spec_rules(env)
   env['cacheable.unversioned-key'] = 'cached_moved_cache_key'
   env['cacheable.store'] = 'server'
 
-  [200, { 'Speculation-Rules' => 'https://shopify.com/specrules.json' }, []]
+  [200, { 'Speculation-Rules' => '\"https://shopify.com/specrules.json\"' }, []]
 end
 
 def spec_rules(env)
@@ -58,7 +58,7 @@ def spec_rules(env)
   env['cacheable.key']   = 'etag_value'
   env['cacheable.unversioned-key'] = 'moved_cache_key'
 
-  [200, { 'Speculation-Rules' => 'https://shopify.com/specrules.json' }, []]
+  [200, { 'Speculation-Rules' => '\"https://shopify.com/specrules.json\"' }, []]
 end
 
 def cacheable_app(env)
