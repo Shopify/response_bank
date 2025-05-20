@@ -42,6 +42,25 @@ def moved(env)
   [301, { 'Location' => 'http://shopify.com', 'Content-Type' => 'text/plain' }, []]
 end
 
+def cached_spec_rules(env)
+  env['cacheable.cache'] = true
+  env['cacheable.miss']  = false
+  env['cacheable.key']   = 'etag_value'
+  env['cacheable.unversioned-key'] = 'cached_moved_cache_key'
+  env['cacheable.store'] = 'server'
+
+  [200, { 'Speculation-Rules' => '"https://shopify.com/specrules.json"' }, []]
+end
+
+def spec_rules(env)
+  env['cacheable.cache'] = true
+  env['cacheable.miss']  = true
+  env['cacheable.key']   = 'etag_value'
+  env['cacheable.unversioned-key'] = 'moved_cache_key'
+
+  [200, { 'Speculation-Rules' => '"https://shopify.com/specrules.json"' }, []]
+end
+
 def cacheable_app(env)
   env['cacheable.cache'] = true
   env['cacheable.miss']  = true
@@ -146,6 +165,26 @@ class MiddlewareTest < Minitest::Test
     assert_equal('"etag_value"', headers['ETag'])
     assert_equal('http://shopify.com', headers['Location'])
     assert(!headers['Content-Encoding'])
+  end
+
+  def test_cache_hit_and_specrules
+    ResponseBank.cache_store.expects(:write).never
+
+    ware = ResponseBank::Middleware.new(method(:cached_spec_rules))
+    result = ware.call(@env)
+    headers = result[1]
+
+    assert_equal('"https://shopify.com/specrules.json"', headers['Speculation-Rules'])
+  end
+
+  def test_cache_miss_and_specrules
+    ResponseBank.cache_store.expects(:write).once
+
+    ware = ResponseBank::Middleware.new(method(:spec_rules))
+    result = ware.call(@env)
+    headers = result[1]
+
+    assert_equal('"https://shopify.com/specrules.json"', headers['Speculation-Rules'])
   end
 
   def test_cache_miss_and_store_limited_headers

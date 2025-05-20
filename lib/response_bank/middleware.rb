@@ -4,7 +4,7 @@ module ResponseBank
   class Middleware
     # Limit the cached headers
     # TODO: Make this lowercase/case-insentitive as per rfc2616 §4.2
-    CACHEABLE_HEADERS = ["Location", "Content-Type", "ETag", "Content-Encoding", "Last-Modified", "Cache-Control", "Expires", "Link", "Surrogate-Keys", "Cache-Tags"].freeze
+    CACHEABLE_HEADERS = ["Location", "Content-Type", "ETag", "Content-Encoding", "Last-Modified", "Cache-Control", "Expires", "Link", "Surrogate-Keys", "Cache-Tags", "Speculation-Rules"].freeze
 
     REQUESTED_WITH = "HTTP_X_REQUESTED_WITH"
     ACCEPT = "HTTP_ACCEPT"
