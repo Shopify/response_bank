@@ -22,9 +22,9 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency("msgpack")
   s.add_runtime_dependency("brotli")
 
-  s.add_development_dependency("minitest", ">= 5.18.0")
-  s.add_development_dependency("mocha", ">= 2.0.0")
+  s.add_development_dependency("minitest")
+  s.add_development_dependency("mocha")
   s.add_development_dependency("rake")
-  s.add_development_dependency("rails", ">= 6.1")
-  s.add_development_dependency("pry")
+  s.add_development_dependency("rails")
+  s.add_development_dependency("simplecov")
 end

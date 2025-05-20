@@ -6,11 +6,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: [ '2.7', '3.3' ]
-        actionpack: [ '6.1', '7.0', 'edge' ]
-        exclude:
-          - ruby: '2.7'
-            actionpack: edge
+        ruby: [ '3.3', '3.4' ]
+        actionpack: [ '7.2', '8.0', 'edge' ]
 
     env:
       BUNDLE_GEMFILE: ${{ github.workspace }}/gemfiles/actionpack_${{ matrix.actionpack }}.gemfile
