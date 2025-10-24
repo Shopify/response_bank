@@ -48,7 +48,7 @@ module ResponseBank
           end
         end
       when 'br'
-        Brotli.deflate(content, mode: :text, quality: 7)
+        Brotli.deflate(content, mode: :text, quality: 4)
       else
         raise ArgumentError, "Unsupported encoding: #{encoding}"
       end
