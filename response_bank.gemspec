@@ -21,6 +21,7 @@ Gem::Specification.new do |s|
 
   s.add_runtime_dependency("msgpack")
   s.add_runtime_dependency("brotli")
+  s.add_runtime_dependency("brotli_splice")
 
   s.add_development_dependency("minitest")
   s.add_development_dependency("mocha")

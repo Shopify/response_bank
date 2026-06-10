@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+require 'response_bank/brotli_splice_slot'
 
 module ResponseBank
   class Middleware
@@ -10,12 +11,15 @@ module ResponseBank
     ACCEPT = "HTTP_ACCEPT"
     USER_AGENT = "HTTP_USER_AGENT"
 
-    def initialize(app)
+    def initialize(app, brotli_splice_injector = nil)
       @app = app
+      @brotli_splice_injector = brotli_splice_injector
     end
 
     def call(env)
       env['cacheable.cache'] = false
+      install_brotli_splice_injector(env)
+
       content_encoding = env['response_bank.server_cache_encoding'] = ResponseBank.check_encoding(env)
 
       status, headers, body = @app.call(env)
@@ -35,15 +39,31 @@ module ResponseBank
           end
 
           body_compressed = nil
+          metadata = nil
           if body_string && body_string != ""
             headers['Content-Encoding'] = content_encoding
             env["cacheable.compression_level"] = ResponseBank.compression_level_for_request(env, headers)
             time = ResponseBank.measure do
-              body_compressed = ResponseBank.compress(
-                body_string,
-                content_encoding,
-                compression_level: env["cacheable.compression_level"],
-              )
+              encoded_body = if content_encoding == 'br'
+                ResponseBank::BrotliSpliceSlot.encode_body(
+                  env,
+                  body_string,
+                  headers,
+                  compression_level: env["cacheable.compression_level"],
+                )
+              end
+
+              if encoded_body
+                body_string = encoded_body.body
+                body_compressed = encoded_body.compressed_body
+                metadata = encoded_body.metadata
+              else
+                body_compressed = ResponseBank.compress(
+                  body_string,
+                  content_encoding,
+                  compression_level: env["cacheable.compression_level"],
+                )
+              end
             end
             ResponseBank.log("Compression time: #{time}ms")
             env["cacheable.compression_time"] = time
@@ -52,6 +72,7 @@ module ResponseBank
           cached_headers = headers.slice(*CACHEABLE_HEADERS)
           # Store result
           cache_data = [status, cached_headers, body_compressed, timestamp, env["cacheable.compression_level"]]
+          cache_data << metadata if metadata
 
           ResponseBank.write_to_cache(env['cacheable.key']) do
             payload = MessagePack.dump(cache_data)
@@ -67,10 +88,15 @@ module ResponseBank
           # as well serve it if the client wants it
           if body_compressed
             if env['HTTP_ACCEPT_ENCODING'].to_s.include?(content_encoding)
-              body = [body_compressed]
+              if content_encoding == 'br'
+                body = [ResponseBank::BrotliSpliceSlot.replace_compressed_body(env, body_compressed, metadata)]
+              else
+                body = [body_compressed]
+              end
             else
               # Remove content-encoding header for response with compressed content
               headers.delete('Content-Encoding')
+              body = [ResponseBank::BrotliSpliceSlot.replace_plain_body(env, body_string, metadata)] if metadata
             end
           end
         end
@@ -86,6 +112,19 @@ module ResponseBank
     end
 
     private
+
+    def install_brotli_splice_injector(env)
+      return unless @brotli_splice_injector
+      return if env.key?(ResponseBank::BrotliSpliceSlot::INJECTOR_ENV_KEY)
+
+      injector = if @brotli_splice_injector.respond_to?(:call)
+        @brotli_splice_injector.call(env)
+      else
+        @brotli_splice_injector
+      end
+
+      env[ResponseBank::BrotliSpliceSlot::INJECTOR_ENV_KEY] = injector if injector
+    end
 
     def timestamp
       Time.now.to_i

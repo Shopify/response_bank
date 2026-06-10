@@ -123,6 +123,87 @@ This gem supports the following versions of Ruby and Rails:
     end
     ```
 
+## Brotli Splice Slots
+
+Applications that need per-request replacement inside cached Brotli HTML responses can pass an injector builder to `ResponseBank::Middleware`:
+
+```ruby
+use ResponseBank::Middleware, ->(env) { HtmlMetadataInjector.new(env) }
+```
+
+Rails applications can configure the same builder through `config.response_bank`:
+
+```ruby
+config.response_bank.brotli_splice_injector =
+  ->(env) { HtmlMetadataInjector.new(env) }
+```
+
+The injector is optional. If it is not configured, ResponseBank uses the normal Brotli compression path. Applications own the concrete injector implementation because they know how to read their request-specific metadata.
+
+Injectors may include `ResponseBank::BrotliSpliceInjector` to document the required methods:
+
+```ruby
+class HtmlMetadataInjector
+  include ResponseBank::BrotliSpliceInjector
+
+  PLACEHOLDER = "00000000-0000-0000-0000-000000000000"
+  PLACEHOLDER_TAG = %(<meta name="shopify-y" content="#{PLACEHOLDER}">)
+
+  def initialize(env)
+    @env = env
+  end
+
+  def prepare_response_bank_brotli_splice(body, _headers)
+    body_with_placeholder = body.sub("</head>", "#{PLACEHOLDER_TAG}</head>")
+    offset = body_with_placeholder.index(PLACEHOLDER)
+    return unless offset
+
+    {
+      body: body_with_placeholder,
+      slots: [
+        {
+          name: "shopify-y",
+          offset: offset,
+          length: PLACEHOLDER.bytesize,
+        },
+      ],
+    }
+  end
+
+  def response_bank_brotli_splice_replacement(slot)
+    shopify_y.ljust(slot.fetch("replacement_length"))
+  end
+
+  def replace_response_bank_brotli_splice_placeholders(body, slots)
+    slots.reduce(body) do |current, slot|
+      replacement = response_bank_brotli_splice_replacement(slot)
+      offset = slot.fetch("html_placeholder_offset")
+      length = slot.fetch("html_placeholder_length")
+
+      current.byteslice(0, offset) + replacement + current.byteslice(offset + length, current.bytesize)
+    end
+  end
+
+  private
+
+  def shopify_y
+    @env.fetch("HTTP_SHOPIFY_Y")
+  end
+end
+```
+
+`prepare_response_bank_brotli_splice` is used on cache writes. It returns HTML containing a neutral placeholder and one slot describing that placeholder. ResponseBank stores the slot metadata with the cached Brotli body.
+
+`response_bank_brotli_splice_replacement` is used on Brotli cache hits. It must return replacement bytes with the same byte length as the stored slot.
+
+`replace_response_bank_brotli_splice_placeholders` is used when a cached Brotli response is decompressed for a client that does not accept Brotli.
+
+Advanced integrations can still install the per-request injector directly in the Rack env before ResponseBank reads or writes the cached body:
+
+```ruby
+env[ResponseBank::BrotliSpliceSlot::INJECTOR_ENV_KEY] = injector
+```
+
 ## License
 
 ResponseBank is released under the [MIT License](LICENSE.txt).

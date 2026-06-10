@@ -15,6 +15,45 @@ require 'response_bank'
 
 ResponseBank.logger = Class.new { def info(a); end }.new
 
+class HtmlMetadataInjector
+  include ResponseBank::BrotliSpliceInjector
+
+  PLACEHOLDER_SUFFIX = "##"
+
+  attr_reader :placeholder, :replacement
+
+  def initialize(placeholder:, replacement:)
+    @placeholder = placeholder
+    @replacement = replacement
+  end
+
+  def prepare_response_bank_brotli_splice(body, _headers)
+    tag = %(<meta name="shopify-y" content="#{placeholder}#{PLACEHOLDER_SUFFIX}">)
+    html = body.sub('</head>', "#{tag}</head>")
+    offset = html.index(placeholder)
+
+    {
+      body: html,
+      slots: [
+        {
+          name: 'shopify_y',
+          offset: offset,
+          length: placeholder.bytesize + PLACEHOLDER_SUFFIX.bytesize,
+        },
+      ],
+    }
+  end
+
+  def response_bank_brotli_splice_replacement(_slot)
+    replacement
+  end
+
+  def replace_response_bank_brotli_splice_placeholders(body, slots)
+    suffix = slots.first['context_suffix'] || PLACEHOLDER_SUFFIX
+    body.sub("#{placeholder}#{suffix}", "#{replacement}#{suffix}")
+  end
+end
+
 class MockController < ActionController::Base
   def self.after_filter(*args); end
 

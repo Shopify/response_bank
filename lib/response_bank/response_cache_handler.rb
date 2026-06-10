@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 require 'digest/md5'
+require 'response_bank/brotli_splice_slot'
 
 module ResponseBank
   class ResponseCacheHandler
@@ -119,7 +120,7 @@ module ResponseBank
         @env['cacheable.miss']  = false
         @env['cacheable.store'] = 'server'
 
-        status, headers, body, timestamp, compression_level = hit
+        status, headers, body, timestamp, compression_level, metadata = hit
 
         @env['cacheable.compression_level'] = compression_level
 
@@ -152,9 +153,14 @@ module ResponseBank
         @headers.merge!(headers)
 
         if @headers['Content-Encoding']
-          if !@env['HTTP_ACCEPT_ENCODING'].to_s.include?(@headers['Content-Encoding'])
+          if @env['HTTP_ACCEPT_ENCODING'].to_s.include?(@headers['Content-Encoding'])
+            if @headers['Content-Encoding'] == 'br'
+              body = ResponseBank::BrotliSpliceSlot.replace_compressed_body(@env, body, metadata)
+            end
+          else
             ResponseBank.log("uncompressing payload for client as client doesn't require encoding")
             body = ResponseBank.decompress(body, @headers['Content-Encoding'])
+            body = ResponseBank::BrotliSpliceSlot.replace_plain_body(@env, body, metadata)
             @headers.delete('Content-Encoding')
           end
         else
@@ -182,7 +188,7 @@ module ResponseBank
       # to avoid unintended greedy matches in we check for naked entity then includes with quoted entity values
       entity_tag = %{"#{entity_tag}"} unless entity_tag.starts_with?('"')
 
-      if_none_match = %{"#{if_none_match}"} unless if_none_match.starts_with?('"') || if_none_match.starts_with?('W/"')
+      if_none_match = %{"#{if_none_match}"} unless if_none_match.start_with?('"') || if_none_match.start_with?('W/"')
 
       if_none_match == entity_tag || if_none_match.include?(entity_tag)
     end

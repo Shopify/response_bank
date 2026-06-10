@@ -1,4 +1,6 @@
 # frozen_string_literal: true
+require 'response_bank/brotli_splice_injector'
+require 'response_bank/brotli_splice_slot'
 require 'response_bank/middleware'
 require 'response_bank/railtie' if defined?(Rails)
 require 'response_bank/response_cache_handler'

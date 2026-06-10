@@ -39,6 +39,37 @@ class ResponseCacheHandlerTest < Minitest::Test
     MessagePack.dump(page(cache_hit, compression))
   end
 
+  def spliced_page_cache_entry(cache_hit = true)
+    etag = cache_hit ? handler.entity_tag_hash : "not-cached"
+    html = '<html><head><meta name="shopify-y" content="00000000-0000-0000-0000-000000000000##"></head><body>cached output</body></html>'
+    placeholder_offset = html.index('00000000-0000-0000-0000-000000000000')
+    result = BrotliSplice.encode(html, placeholder_offset, 38, quality: 7)
+    metadata = {
+      'brotli_splice' => {
+        'version' => 1,
+        'slots' => [
+          {
+            'name' => 'shopify_y',
+            'compressed_offset' => result[:secret_offset],
+            'replacement_length' => result[:secret_length],
+            'html_placeholder_offset' => placeholder_offset,
+            'html_placeholder_length' => 38,
+            'context_suffix' => result[:context_suffix],
+          },
+        ],
+      },
+    }
+
+    MessagePack.dump([
+      200,
+      {"Content-Type" => "text/html", "ETag" => %{"#{etag}"}, "Content-Encoding" => 'br'},
+      result[:data],
+      1331765506,
+      7,
+      metadata,
+    ])
+  end
+
   def page_uncompressed(cache_hit = true)
     etag = cache_hit ? handler.entity_tag_hash : "not-cached"
     [200, {"Content-Type" => "text/html", "ETag" => %{"#{etag}"}}, "<body>cached output</body>", 1331765506]
@@ -168,6 +199,58 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert_equal(_headers['Content-Type'], headers["Content-Type"])
     assert_nil(headers["Content-Encoding"])
     assert_equal(9, controller.request.env['cacheable.compression_level'])
+    assert_cache_miss(false, 'server')
+  end
+
+  def test_server_cache_hit_replaces_brotli_splice_slot_for_brotli_client
+    controller.request.env['HTTP_ACCEPT_ENCODING'] = 'br'
+    controller.request.env[ResponseBank::BrotliSpliceSlot::INJECTOR_ENV_KEY] = HtmlMetadataInjector.new(
+      placeholder: '00000000-0000-0000-0000-000000000000',
+      replacement: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+    )
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(spliced_page_cache_entry)
+
+    status, headers, body = handler.run!
+    decoded_body = Brotli.inflate(body.first)
+
+    assert_equal(200, status)
+    assert_equal('br', headers['Content-Encoding'])
+    assert_includes(decoded_body, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')
+    refute_includes(decoded_body, '00000000-0000-0000-0000-000000000000')
+    assert_cache_miss(false, 'server')
+  end
+
+  def test_server_cache_hit_replaces_plain_placeholder_for_non_brotli_client
+    controller.request.env['HTTP_ACCEPT_ENCODING'] = 'gzip'
+    controller.request.env[ResponseBank::BrotliSpliceSlot::INJECTOR_ENV_KEY] = HtmlMetadataInjector.new(
+      placeholder: '00000000-0000-0000-0000-000000000000',
+      replacement: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    )
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(spliced_page_cache_entry)
+
+    status, headers, body = handler.run!
+
+    assert_equal(200, status)
+    assert_nil(headers['Content-Encoding'])
+    assert_includes(body.first, 'cccccccc-cccc-cccc-cccc-cccccccccccc')
+    refute_includes(body.first, '00000000-0000-0000-0000-000000000000')
+    assert_cache_miss(false, 'server')
+  end
+
+  def test_server_cache_hit_serves_cached_body_when_replacement_length_mismatches
+    controller.request.env['HTTP_ACCEPT_ENCODING'] = 'br'
+    controller.request.env[ResponseBank::BrotliSpliceSlot::INJECTOR_ENV_KEY] = HtmlMetadataInjector.new(
+      placeholder: '00000000-0000-0000-0000-000000000000',
+      replacement: 'too-short',
+    )
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(spliced_page_cache_entry)
+
+    _status, headers, body = handler.run!
+    decoded_body = Brotli.inflate(body.first)
+
+    assert_equal('br', headers['Content-Encoding'])
+    assert_includes(decoded_body, '00000000-0000-0000-0000-000000000000')
+    refute_includes(decoded_body, 'too-short')
     assert_cache_miss(false, 'server')
   end
 
