@@ -6,9 +6,9 @@ gemspec
 
 gem 'rails'
 
-gem 'brotli_splice',
-  git: 'https://github.com/shopify-playground/brotli_splice.git',
-  ref: '4ef8a22c1980ba3196f2006472d7736757f9df25'
+source "https://pkgs.shopify.io/basic/gems/ruby" do
+  gem "brotli_splice", "= 0.1.1"
+end
 
 gem 'minitest', require: false, group: :test
 gem 'mocha', require: false, group: :test

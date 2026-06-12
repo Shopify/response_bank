@@ -1,9 +1,7 @@
-GIT
-  remote: https://github.com/shopify-playground/brotli_splice.git
-  revision: 4ef8a22c1980ba3196f2006472d7736757f9df25
-  ref: 4ef8a22c1980ba3196f2006472d7736757f9df25
+GEM
+  remote: https://pkgs.shopify.io/basic/gems/ruby/
   specs:
-    brotli_splice (0.1.0)
+    brotli_splice (0.1.1)
 
 PATH
   remote: .
@@ -241,7 +239,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  brotli_splice!
+  brotli_splice (= 0.1.1)!
   minitest
   mocha
   rails
