@@ -1,8 +1,3 @@
-GEM
-  remote: https://pkgs.shopify.io/basic/gems/ruby/
-  specs:
-    brotli_splice (0.1.1)
-
 PATH
   remote: .
   specs:
@@ -89,6 +84,7 @@ GEM
     benchmark (0.4.1)
     bigdecimal (3.2.2)
     brotli (0.7.0)
+    brotli_splice (0.1.1)
     builder (3.3.0)
     concurrent-ruby (1.3.5)
     connection_pool (2.5.3)
@@ -239,7 +235,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  brotli_splice (= 0.1.1)!
+  brotli_splice (= 0.1.1)
   minitest
   mocha
   rails

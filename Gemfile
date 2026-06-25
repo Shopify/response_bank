@@ -5,10 +5,7 @@ source "https://rubygems.org"
 gemspec
 
 gem 'rails'
-
-source "https://pkgs.shopify.io/basic/gems/ruby" do
-  gem "brotli_splice", "= 0.1.1"
-end
+gem "brotli_splice", "= 0.1.1"
 
 gem 'minitest', require: false, group: :test
 gem 'mocha', require: false, group: :test
