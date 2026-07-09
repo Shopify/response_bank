@@ -155,7 +155,7 @@ module ResponseBank
         if @headers['Content-Encoding']
           if @env['HTTP_ACCEPT_ENCODING'].to_s.include?(@headers['Content-Encoding'])
             if @headers['Content-Encoding'] == 'br'
-              body = ResponseBank::BrotliSpliceSlot.replace_compressed_body(@env, body, metadata)
+              body = ResponseBank::BrotliSpliceSlot.replace_compressed_secret(@env, body, metadata)
             end
           else
             ResponseBank.log("uncompressing payload for client as client doesn't require encoding")
@@ -186,7 +186,7 @@ module ResponseBank
 
       # strictly speaking an unquoted etag is not valid, yet common
       # to avoid unintended greedy matches in we check for naked entity then includes with quoted entity values
-      entity_tag = %{"#{entity_tag}"} unless entity_tag.starts_with?('"')
+      entity_tag = %{"#{entity_tag}"} unless entity_tag.start_with?('"')
 
       if_none_match = %{"#{if_none_match}"} unless if_none_match.start_with?('"') || if_none_match.start_with?('W/"')
 

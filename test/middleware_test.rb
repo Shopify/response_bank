@@ -132,6 +132,54 @@ def client_hit_app(env)
   [304, { 'Content-Type' => 'text/plain' }, body]
 end
 
+# An injector that addresses the slot by byte offset/length (like the README example
+# and the real storefront injector), so it can splice the replacement into the
+# *uncompressed* body served on the miss -> plain-body branch. The string-substitution
+# HtmlMetadataInjector in test_helper only matches once the Brotli body is decompressed.
+class OffsetHtmlMetadataInjector
+  include ResponseBank::BrotliSpliceInjector
+
+  CONTEXT_SUFFIX = "\r\n"
+
+  def initialize(placeholder:, replacement:)
+    @placeholder = placeholder
+    @replacement = replacement
+  end
+
+  def prepare_response_bank_brotli_splice(body, _headers)
+    tag = %(<meta name="shopify-y" content="#{@placeholder}#{CONTEXT_SUFFIX}">)
+    html = body.sub('</head>', "#{tag}</head>")
+    offset = html.b.index(@placeholder)
+
+    {
+      body: html,
+      slots: [
+        {
+          name: 'shopify_y',
+          offset: offset,
+          length: @placeholder.bytesize + CONTEXT_SUFFIX.bytesize,
+        },
+      ],
+    }
+  end
+
+  def response_bank_brotli_splice_replacement(slot)
+    @replacement if @replacement.bytesize == slot.fetch('replacement_length')
+  end
+
+  def replace_response_bank_brotli_splice_placeholders(body, slots)
+    slots.reduce(body) do |current, slot|
+      replacement = response_bank_brotli_splice_replacement(slot)
+      next current unless replacement
+
+      offset = slot.fetch('html_placeholder_offset')
+      length = slot.fetch('html_placeholder_length')
+      suffix = slot.fetch('context_suffix', CONTEXT_SUFFIX)
+      current.byteslice(0, offset) + replacement + suffix + current.byteslice(offset + length, current.bytesize)
+    end
+  end
+end
+
 class MiddlewareTest < Minitest::Test
   def setup
     @original_cache_store = ResponseBank.cache_store
@@ -445,6 +493,40 @@ class MiddlewareTest < Minitest::Test
 
     decoded_served_body = Brotli.inflate(result[2].first)
     assert_includes(decoded_served_body, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+  end
+
+  def test_cache_miss_with_injector_serves_spliced_plain_body_to_client_without_br
+    ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
+    @env['HTTP_ACCEPT_ENCODING'] = 'deflate, pkzip' # accepts neither br nor gzip
+
+    injector = OffsetHtmlMetadataInjector.new(
+      placeholder: '00000000-0000-0000-0000-000000000000',
+      replacement: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    )
+
+    ware = ResponseBank::Middleware.new(method(:cacheable_html_app), ->(_env) { injector })
+    result = ware.call(@env)
+    headers = result[1]
+    served_body = result[2].first
+
+    # The server still Brotli-encodes for its cache -- check_encoding defaults to 'br'
+    # even though this client accepts neither br nor gzip -- and stores the neutral
+    # placeholder plus the slot metadata.
+    captured_payload = MessagePack.load(ResponseBank.cache_store.read('cacheable_html_app_cache_key', raw: true))
+    _status, cached_headers, cached_body, _timestamp, _compression_level, metadata = captured_payload
+    assert_equal('br', cached_headers['Content-Encoding'])
+    assert(metadata, 'expected brotli_splice metadata to be cached')
+    assert_includes(Brotli.inflate(cached_body), '00000000-0000-0000-0000-000000000000')
+
+    # Because the client cannot accept br, the middleware takes the
+    # `replace_plain_body(...) if metadata` branch (reachable -- not dead code): it
+    # serves an uncompressed body with the per-request value spliced in and drops
+    # Content-Encoding.
+    assert_nil(headers['Content-Encoding'])
+    assert_equal('miss', headers['X-Cache'])
+    assert_includes(served_body, '<body>Hi</body>')
+    assert_includes(served_body, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+    refute_includes(served_body, '00000000-0000-0000-0000-000000000000')
   end
 
   def test_configured_brotli_splice_injector_is_installed_before_app_call

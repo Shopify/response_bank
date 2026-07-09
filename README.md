@@ -146,8 +146,16 @@ Injectors may include `ResponseBank::BrotliSpliceInjector` to document the requi
 class HtmlMetadataInjector
   include ResponseBank::BrotliSpliceInjector
 
-  PLACEHOLDER = "00000000-0000-0000-0000-000000000000"
-  PLACEHOLDER_TAG = %(<meta name="shopify-y" content="#{PLACEHOLDER}">)
+  # The per-request value spliced in on cache hits (a 36-byte UUID).
+  TOKEN_PLACEHOLDER = "00000000-0000-0000-0000-000000000000"
+  # BrotliSplice reserves the LAST 2 bytes of a slot as a fixed "\r\n" context
+  # suffix, so a slot must span 2 more bytes than its replaceable region and
+  # `replacement_length` always comes back as `slot length - 2`. We let those
+  # 2 bytes be a real "\r\n" placed after the tag, where a line break is
+  # harmless — the replaceable region is therefore `<uuid>">` (38 bytes).
+  CONTEXT_SUFFIX = "\r\n"
+  PLACEHOLDER_TAG = %(<meta name="shopify-y" content="#{TOKEN_PLACEHOLDER}">#{CONTEXT_SUFFIX})
+  SLOT = %(#{TOKEN_PLACEHOLDER}">#{CONTEXT_SUFFIX}) # 38 replaceable bytes + 2 reserved
 
   def initialize(env)
     @env = env
@@ -155,46 +163,75 @@ class HtmlMetadataInjector
 
   def prepare_response_bank_brotli_splice(body, _headers)
     body_with_placeholder = body.sub("</head>", "#{PLACEHOLDER_TAG}</head>")
-    offset = body_with_placeholder.index(PLACEHOLDER)
+    # Use a byte offset: BrotliSplice.encode addresses the slot by bytes.
+    offset = body_with_placeholder.b.index(TOKEN_PLACEHOLDER)
     return unless offset
 
     {
       body: body_with_placeholder,
       slots: [
         {
-          name: "shopify-y",
+          name: "shopify_y",
           offset: offset,
-          length: PLACEHOLDER.bytesize,
+          # Include the 2 bytes reserved for the context suffix, or the
+          # replacement below will be 2 bytes too long and silently dropped.
+          length: SLOT.bytesize,
         },
       ],
     }
   end
 
   def response_bank_brotli_splice_replacement(slot)
-    shopify_y.ljust(slot.fetch("replacement_length"))
+    # Must return EXACTLY slot["replacement_length"] bytes (== slot length - 2).
+    # If it does not, ResponseBank skips the splice and serves the neutral
+    # placeholder, so guard the length rather than assuming it.
+    replacement = %(#{shopify_y}">)
+    return unless replacement.bytesize == slot.fetch("replacement_length")
+
+    replacement
   end
 
   def replace_response_bank_brotli_splice_placeholders(body, slots)
     slots.reduce(body) do |current, slot|
       replacement = response_bank_brotli_splice_replacement(slot)
+      next current unless replacement
+
       offset = slot.fetch("html_placeholder_offset")
       length = slot.fetch("html_placeholder_length")
+      suffix = slot.fetch("context_suffix", CONTEXT_SUFFIX)
 
-      current.byteslice(0, offset) + replacement + current.byteslice(offset + length, current.bytesize)
+      # replacement + suffix must equal the original slot length (byteslice
+      # replaces `length` bytes), keeping the body byte-for-byte consistent.
+      current.byteslice(0, offset) + replacement + suffix +
+        current.byteslice(offset + length, current.bytesize)
     end
   end
 
   private
 
   def shopify_y
-    @env.fetch("HTTP_SHOPIFY_Y")
+    @env.fetch("HTTP_SHOPIFY_Y") # 36-byte UUID
   end
 end
 ```
 
-`prepare_response_bank_brotli_splice` is used on cache writes. It returns HTML containing a neutral placeholder and one slot describing that placeholder. ResponseBank stores the slot metadata with the cached Brotli body.
+`prepare_response_bank_brotli_splice` is used on cache writes. It returns HTML
+containing a neutral placeholder and one slot describing that placeholder.
+ResponseBank stores the slot metadata with the cached Brotli body. The slot's
+`offset` and `length` are **byte** offsets/counts — `BrotliSplice.encode`
+addresses the stream by bytes — so locate the placeholder on a binary view
+(`body.b.index(...)`) and size it with `bytesize`. A plain `String#index`/`size`
+silently breaks once any multi-byte UTF-8 precedes the placeholder: a character
+offset is always ≤ the byte length, so the bounds check still passes.
 
-`response_bank_brotli_splice_replacement` is used on Brotli cache hits. It must return replacement bytes with the same byte length as the stored slot.
+`response_bank_brotli_splice_replacement` is used on Brotli cache hits. It must
+return exactly `slot["replacement_length"]` bytes. Note that `replacement_length`
+is **2 fewer** than the `length` you registered in the slot: `BrotliSplice.encode`
+reserves the last 2 bytes of every slot as a fixed `\r\n` context suffix. So size
+your placeholder to include those 2 bytes (as the example does with the trailing
+`\r\n`), and have the replacement match `replacement_length`. If the byte length
+does not match, ResponseBank **silently skips the splice and serves the neutral
+placeholder** — no exception is raised — so guard the length instead of assuming it.
 
 `replace_response_bank_brotli_splice_placeholders` is used when a cached Brotli response is decompressed for a client that does not accept Brotli.
 

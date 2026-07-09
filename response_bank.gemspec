@@ -21,7 +21,13 @@ Gem::Specification.new do |s|
 
   s.add_runtime_dependency("msgpack")
   s.add_runtime_dependency("brotli")
-  s.add_runtime_dependency("brotli_splice")
+
+  # brotli_splice is optional for consumers: only apps that opt into Brotli splice
+  # slots need this native extension, so it is not a runtime dependency (they add it
+  # to their own Gemfile -- see README). It is a development dependency here so the
+  # gem's own test suite, which exercises the splice path directly, can load it --
+  # including the actionpack matrix gemfiles in CI, which inherit it through gemspec.
+  s.add_development_dependency("brotli_splice", "= 0.1.1")
 
   s.add_development_dependency("minitest")
   s.add_development_dependency("mocha")

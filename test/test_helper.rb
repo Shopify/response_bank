@@ -12,6 +12,10 @@ require 'action_controller/railtie'
 require 'mocha/minitest'
 
 require 'response_bank'
+# response_bank now loads the native brotli_splice gem lazily (only when an app opts
+# into splice slots). The test suite exercises that feature directly -- e.g. building
+# spliced cache fixtures with BrotliSplice.encode -- so load it explicitly here.
+require 'brotli_splice'
 
 ResponseBank.logger = Class.new { def info(a); end }.new
 

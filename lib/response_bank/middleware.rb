@@ -89,7 +89,7 @@ module ResponseBank
           if body_compressed
             if env['HTTP_ACCEPT_ENCODING'].to_s.include?(content_encoding)
               if content_encoding == 'br'
-                body = [ResponseBank::BrotliSpliceSlot.replace_compressed_body(env, body_compressed, metadata)]
+                body = [ResponseBank::BrotliSpliceSlot.replace_compressed_secret(env, body_compressed, metadata)]
               else
                 body = [body_compressed]
               end

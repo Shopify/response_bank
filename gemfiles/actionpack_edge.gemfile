@@ -5,3 +5,4 @@ gemspec(path: '..')
 
 gem('rails', github: 'rails/rails', branch: 'main')
 gem('simplecov', require: false, group: :test)
+
