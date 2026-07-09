@@ -44,6 +44,16 @@ class ResponseCacheHandlerTest < Minitest::Test
     [200, {"Content-Type" => "text/html", "ETag" => %{"#{etag}"}}, "<body>cached output</body>", 1331765506]
   end
 
+  def unprocessable_entity_page(cache_hit = true, compression="br")
+    etag = cache_hit ? handler.entity_tag_hash : "not-cached"
+    body = JSON.dump({errors: {field: ["is invalid"]}})
+    [422, {"Content-Type" => "application/json", "ETag" => %{"#{etag}"}, "Content-Encoding" => compression}, ResponseBank.compress(body, compression), 1331765506]
+  end
+
+  def unprocessable_entity_cache_entry(cache_hit = true, compression="br")
+    MessagePack.dump(unprocessable_entity_page(cache_hit, compression))
+  end
+
   def test_cache_miss_block_is_only_called_once_if_it_return_nil
     called = 0
     my_handler = ResponseBank::ResponseCacheHandler.new(
@@ -297,5 +307,34 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert_equal(content_encoding, headers["Content-Encoding"]) if content_encoding
 
     body
+  end
+
+  def test_server_cache_hit_unprocessable_entity
+    controller.request.env['response_bank.server_cache_encoding'] = 'br'
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(unprocessable_entity_cache_entry(true, 'br'))
+
+    body = JSON.dump({errors: {field: ["is invalid"]}})
+    page_decompressed = [422, {"Content-Type" => "application/json", "ETag" => handler.entity_tag_hash, "Content-Encoding" => 'br'}, body, 1331765506]
+
+    expect_page_rendered(page_decompressed, nil)
+    assert_cache_miss(false, 'server')
+  end
+
+  def test_unprocessable_entity_decompression
+    controller.request.env['response_bank.server_cache_encoding'] = 'gzip'
+    cache_entry = unprocessable_entity_page(true, 'br')
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(MessagePack.dump(cache_entry))
+    controller.request.env['HTTP_ACCEPT_ENCODING'] = 'gzip'
+
+    _status, _headers, _body, _timestamp = cache_entry
+
+    ResponseBank.expects(:decompress).returns(_body).once
+
+    status, headers, _body = handler.run!
+
+    assert_equal(_status, status)
+    assert_equal(_headers['Content-Type'], headers["Content-Type"])
+    assert_nil(headers["Content-Encoding"])
+    assert_cache_miss(false, 'server')
   end
 end

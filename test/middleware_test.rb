@@ -123,6 +123,27 @@ def client_hit_app(env)
   [304, { 'Content-Type' => 'text/plain' }, body]
 end
 
+def unprocessable_entity(env)
+  env['cacheable.cache'] = true
+  env['cacheable.miss']  = true
+  env['cacheable.key']   = 'etag_value'
+  env['cacheable.unversioned-key'] = 'unprocessable_entity_cache_key'
+
+  body = [JSON.dump({errors: {email: ["is invalid"]}})]
+  [422, { 'Content-Type' => 'application/json' }, body]
+end
+
+def cached_unprocessable_entity(env)
+  env['cacheable.cache'] = true
+  env['cacheable.miss']  = false
+  env['cacheable.key']   = 'etag_value'
+  env['cacheable.unversioned-key'] = 'cached_unprocessable_entity_cache_key'
+  env['cacheable.store'] = 'server'
+
+  body = [JSON.dump({errors: {email: ["is invalid"]}})]
+  [422, { 'Content-Type' => 'application/json' }, body]
+end
+
 class MiddlewareTest < Minitest::Test
   def setup
     @original_cache_store = ResponseBank.cache_store
@@ -428,6 +449,63 @@ class MiddlewareTest < Minitest::Test
     assert(@env['cacheable.cache'])
     assert(!@env['cacheable.miss'])
     assert_equal('client', @env['cacheable.store'])
+    assert_equal('"etag_value"', headers['ETag'])
+  end
+
+  def test_cache_miss_and_unprocessable_entity
+    ResponseBank.cache_store.expects(:write).once
+
+    ware = ResponseBank::Middleware.new(method(:unprocessable_entity))
+    result = ware.call(@env)
+    headers = result[1]
+
+    assert_equal('"etag_value"', headers['ETag'])
+    assert_equal('miss', headers['X-Cache'])
+  end
+
+  def test_cache_hit_and_unprocessable_entity
+    ResponseBank.cache_store.expects(:write).never
+
+    ware = ResponseBank::Middleware.new(method(:cached_unprocessable_entity))
+    result = ware.call(@env)
+    headers = result[1]
+
+    assert_equal('"etag_value"', headers['ETag'])
+    assert_equal('hit, server', headers['X-Cache'])
+  end
+
+  def test_cache_miss_and_store_unprocessable_entity_with_br
+    ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
+    body = JSON.dump({errors: {email: ["is invalid"]}})
+
+    ResponseBank.cache_store.expects(:write).with(
+      'unprocessable_entity_cache_key',
+      MessagePack.dump([422, {'Content-Type' => 'application/json', 'ETag' => '"etag_value"', 'Content-Encoding' => 'br'}, ResponseBank.compress(body, 'br'), 424242]),
+      raw: true,
+      expires_in: nil,
+    ).once
+
+    @env['HTTP_ACCEPT_ENCODING'] = 'deflate, br, gzip'
+
+    ware = ResponseBank::Middleware.new(method(:unprocessable_entity))
+    result = ware.call(@env)
+    headers = result[1]
+
+    assert(@env['cacheable.cache'])
+    assert(@env['cacheable.miss'])
+    assert_equal('"etag_value"', headers['ETag'])
+    assert_equal('miss', headers['X-Cache'])
+    assert_equal('br', headers['Content-Encoding'])
+  end
+
+  def test_unprocessable_entity_gets_etag
+    ware = ResponseBank::Middleware.new(method(:unprocessable_entity))
+    result = ware.call(@env)
+
+    status = result[0]
+    headers = result[1]
+
+    assert_equal(422, status)
     assert_equal('"etag_value"', headers['ETag'])
   end
 end

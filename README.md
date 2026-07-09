@@ -2,10 +2,11 @@
 
 ## Features
 
-* Serve gzip'd content
+* Serve gzip'd and brotli-compressed content
 * Add ETag and 304 Not Modified headers
 * Generational caching
 * No explicit expiry
+* Caches 200 (OK), 301 (Moved Permanently), 404 (Not Found), and 422 (Unprocessable Entity) responses
 
 ## Support
 

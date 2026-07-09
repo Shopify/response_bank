@@ -72,6 +72,17 @@ class ResponseBankControllerTest < Minitest::Test
     controller.send(:response_cache) {}
   end
 
+  def test_server_cache_hit_unprocessable_entity
+    controller.request.env['response_bank.server_cache_encoding'] = 'br'
+    @cache_store.expects(:read).returns(unprocessable_entity_serialized)
+    ResponseBank::ResponseCacheHandler.any_instance.expects(:entity_tag_hash).returns('v1').at_least_once
+
+    body = JSON.dump({errors: {email: ["is invalid"]}})
+    controller.expects(:render).with(plain: body, status: 422)
+
+    controller.send(:response_cache) {}
+  end
+
   private
 
   def controller
@@ -80,5 +91,10 @@ class ResponseBankControllerTest < Minitest::Test
 
   def page_serialized
     MessagePack.dump([200, {"Content-Type" => "text/html", "Content-Encoding" => "br", "ETag" => '"v1"'}, ResponseBank.compress("<body>hi.</body>", "br"), 1331765506])
+  end
+
+  def unprocessable_entity_serialized
+    body = JSON.dump({errors: {email: ["is invalid"]}})
+    MessagePack.dump([422, {"Content-Type" => "application/json", "Content-Encoding" => "br", "ETag" => '"v1"'}, ResponseBank.compress(body, "br"), 1331765506])
   end
 end

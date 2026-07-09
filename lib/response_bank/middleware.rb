@@ -21,11 +21,11 @@ module ResponseBank
       status, headers, body = @app.call(env)
 
       if env['cacheable.cache']
-        if [200, 404, 301, 304].include?(status)
+        if [200, 404, 301, 304, 422].include?(status)
           headers['ETag'] = %{"#{env['cacheable.key']}"}
         end
 
-        if [200, 404, 301].include?(status) && env['cacheable.miss']
+        if [200, 404, 301, 422].include?(status) && env['cacheable.miss']
           # Flatten down the result so that it can be stored to memcached.
           if body.is_a?(String)
             body_string = body
