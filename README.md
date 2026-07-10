@@ -11,7 +11,7 @@
 
 This gem supports the following versions of Ruby and Rails:
 
-* Ruby 2.7.0+
+* Ruby 3.1.0+
 * Rails 6.0.0+
 
 ## Usage
