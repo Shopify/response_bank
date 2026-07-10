@@ -61,6 +61,25 @@ def spec_rules(env)
   [200, { 'Speculation-Rules' => '"https://shopify.com/specrules.json"' }, []]
 end
 
+def cached_shopify_theme(env)
+  env['cacheable.cache'] = true
+  env['cacheable.miss']  = false
+  env['cacheable.key']   = 'etag_value'
+  env['cacheable.unversioned-key'] = 'cached_shopify_theme_cache_key'
+  env['cacheable.store'] = 'server'
+
+  [200, { 'Shopify-Theme' => 'dawn-v1.2.3' }, []]
+end
+
+def shopify_theme(env)
+  env['cacheable.cache'] = true
+  env['cacheable.miss']  = true
+  env['cacheable.key']   = 'etag_value'
+  env['cacheable.unversioned-key'] = 'shopify_theme_cache_key'
+
+  [200, { 'Shopify-Theme' => 'dawn-v1.2.3' }, []]
+end
+
 def cacheable_app(env)
   env['cacheable.cache'] = true
   env['cacheable.miss']  = true
@@ -252,6 +271,26 @@ class MiddlewareTest < Minitest::Test
     headers = result[1]
 
     assert_equal('"https://shopify.com/specrules.json"', headers['Speculation-Rules'])
+  end
+
+  def test_cache_hit_and_shopify_theme
+    ResponseBank.cache_store.expects(:write).never
+
+    ware = ResponseBank::Middleware.new(method(:cached_shopify_theme))
+    result = ware.call(@env)
+    headers = result[1]
+
+    assert_equal('dawn-v1.2.3', headers['Shopify-Theme'])
+  end
+
+  def test_cache_miss_and_shopify_theme
+    ResponseBank.cache_store.expects(:write).once
+
+    ware = ResponseBank::Middleware.new(method(:shopify_theme))
+    result = ware.call(@env)
+    headers = result[1]
+
+    assert_equal('dawn-v1.2.3', headers['Shopify-Theme'])
   end
 
   def test_cache_miss_and_store_limited_headers
