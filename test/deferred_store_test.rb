@@ -63,6 +63,22 @@ class ResponseBankDeferredStoreTest < Minitest::Test
     end
   end
 
+  def test_complete_spliced_accepts_a_cache_safe_brotli_body_without_a_slot
+    store = ResponseBank.defer_store(@env, timestamp: 424242)
+    ResponseBank::DeferredStore.arm_from_middleware(
+      @env,
+      status: 200,
+      headers: { 'Content-Type' => 'text/html' },
+    )
+    compressed_body = ResponseBank.compress('already compressed', 'br')
+
+    assert(store.complete_spliced(body: compressed_body, compression_level: 5))
+
+    payload = MessagePack.load(ResponseBank.cache_store.read('store_cache_key', raw: true))
+    assert_equal(compressed_body, payload[2])
+    assert_equal(5, payload[4])
+  end
+
   def test_abort_releases_an_owned_lock_once
     store = ResponseBank.defer_store(@env)
     ResponseBank::DeferredStore.arm_from_middleware(@env, status: 200, headers: {})
