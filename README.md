@@ -145,6 +145,26 @@ The middleware arms the handle after the application returns the Rack tuple. It 
 
 Call `complete` only after the intended response was generated and written successfully. Never call it from a rescue or ensure path. Do not complete failed, timed-out, disconnected, or truncated responses. The body must be the shared cache representation and must not contain client-specific data added for the live response.
 
+A caller that has already produced a Brotli representation can complete the fill without a second compression pass:
+
+```ruby
+deferred_store.complete_spliced(
+  headers: cache_headers,
+  body: compressed_body,
+  compression_level: 5,
+  slot: {
+    name: 'shopify_y',
+    compressed_offset: slot_offset,
+    replacement_length: replacement_length,
+    html_placeholder_offset: html_placeholder_offset,
+    html_placeholder_length: html_placeholder_length,
+    context_suffix: "\r\n",
+  },
+)
+```
+
+The body must be a complete, non-empty Brotli stream in the server cache encoding. It must already be safe for shared caching: if the live response contained client-specific slot bytes, replace them with the neutral placeholder before calling `complete_spliced`. ResponseBank builds versioned cache metadata from the slot descriptor. Omit `slot` when the Brotli stream has no replaceable content.
+
 The headers passed to `complete` describe the cached representation. They can differ from headers already sent to the client. ResponseBank rejects final cache headers that contain `private` or `no-store`, and it does not mutate the supplied hash. It captures the cache timestamp when `defer_store` is called, before deferred rendering and compression.
 
 `abort` is idempotent and releases an owned fill lock through `ResponseBank.release_lock`. Its default implementation is a no-op. The existing `write_to_cache` hook remains responsible for cleanup after a write attempt. An integration that releases those fills from `write_to_cache` should also implement `release_lock` for abandoned fills and failures that happen before the write hook. A key-only lock cannot prevent an old fill from releasing a replacement lock after its lease expires; integrations that need that guarantee must use owner tokens in their lock implementation.
