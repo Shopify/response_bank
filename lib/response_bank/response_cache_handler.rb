@@ -159,6 +159,10 @@ module ResponseBank
         # version check
         # unversioned but tolerance threshold
         # regen
+        if metadata&.key?(ResponseBank::APP_METADATA_KEY)
+          @env[ResponseBank::METADATA_ENV_KEY] = metadata[ResponseBank::APP_METADATA_KEY]
+        end
+
         @headers.merge!(headers)
 
         if @headers['Content-Encoding']
