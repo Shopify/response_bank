@@ -151,29 +151,17 @@ The headers passed to `complete` describe the cached representation. They can di
 
 ## Cache Entry Metadata
 
-Applications can store a Hash of their own metadata inside a cache entry, next to
-the body it describes, by setting `env['cacheable.metadata']` before the response
-is written (either by the middleware or by a deferred store):
+Applications can store a Hash inside a cache entry by setting
+`env['cacheable.metadata']` before the response is stored:
 
 ```ruby
 env['cacheable.metadata'] = { 'rollout_exposures' => { flag => event_name } }
 ```
 
-On a server cache hit, `env['cacheable.metadata']` holds the Hash that was stored
-with the entry actually being served, including stale entries served while a
-revalidation is in flight. The slot always reflects the served entry: it is
-removed when the entry carries no application metadata, even if the application
-set it earlier in the request, and it is only published once the cached response
-has been prepared, so a hit that falls back to a refill never carries the rejected
-entry's metadata into the new one. Because the metadata is part of the same cache
-item as the body, it is written, evicted, and versioned together with it: an
-application can rely on "the body is present, therefore its metadata is present",
-which a second cache entry keyed off `cacheable.key` cannot guarantee.
-
-The Hash is serialized with MessagePack, so keys and values must be MessagePack
-types and come back with String keys. Application metadata is nested under
-`ResponseBank::APP_METADATA_KEY` inside the entry so it cannot collide with
-ResponseBank's own slots such as `brotli_splice`.
+On a server cache hit, `env['cacheable.metadata']` holds the Hash stored with the
+served entry, stale or fresh; the key is removed when the entry has none. The Hash
+is serialized with MessagePack (String keys on read) and nested under
+`ResponseBank::APP_METADATA_KEY`, so it cannot collide with ResponseBank's own slots.
 
 ## Brotli Splice Slots
 

@@ -114,8 +114,7 @@ module ResponseBank
         data
       end
 
-      # Never lets application metadata prevent the response itself from being
-      # cached: a value that is not a Hash is logged and left out of the entry.
+      # A non-Hash value is logged and skipped rather than failing the write.
       def entry_metadata(env, metadata)
         app_metadata = env[ResponseBank::METADATA_ENV_KEY]
         return metadata if app_metadata.nil?
