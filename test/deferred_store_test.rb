@@ -63,6 +63,21 @@ class ResponseBankDeferredStoreTest < Minitest::Test
     end
   end
 
+  def test_complete_stores_application_metadata_set_during_rendering
+    store = ResponseBank.defer_store(@env, timestamp: 424242)
+    ResponseBank::DeferredStore.arm_from_middleware(
+      @env,
+      status: 200,
+      headers: { 'Content-Type' => 'text/plain' },
+    )
+    @env[ResponseBank::METADATA_ENV_KEY] = { 'rollout_exposures' => { 'flag' => 'page_viewed' } }
+
+    assert(store.complete(body: 'Hi'))
+
+    payload = MessagePack.load(ResponseBank.cache_store.read('store_cache_key', raw: true))
+    assert_equal({ 'app' => { 'rollout_exposures' => { 'flag' => 'page_viewed' } } }, payload[5])
+  end
+
   def test_abort_releases_an_owned_lock_once
     store = ResponseBank.defer_store(@env)
     ResponseBank::DeferredStore.arm_from_middleware(@env, status: 200, headers: {})

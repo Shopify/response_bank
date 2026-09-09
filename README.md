@@ -149,6 +149,29 @@ The headers passed to `complete` describe the cached representation. They can di
 
 `abort` is idempotent and releases an owned fill lock through `ResponseBank.release_lock`. Its default implementation is a no-op. The existing `write_to_cache` hook remains responsible for cleanup after a write attempt. An integration that releases those fills from `write_to_cache` should also implement `release_lock` for abandoned fills and failures that happen before the write hook. A key-only lock cannot prevent an old fill from releasing a replacement lock after its lease expires; integrations that need that guarantee must use owner tokens in their lock implementation.
 
+## Cache Entry Metadata
+
+Applications can store a Hash of their own metadata inside a cache entry, next to
+the body it describes, by setting `env['cacheable.metadata']` before the response
+is written (either by the middleware or by a deferred store):
+
+```ruby
+env['cacheable.metadata'] = { 'rollout_exposures' => { flag => event_name } }
+```
+
+On a server cache hit, `env['cacheable.metadata']` holds the Hash that was stored
+with the entry actually being served, including stale entries served while a
+revalidation is in flight. The key is absent when the entry carries no
+application metadata. Because the metadata is part of the same cache item as the
+body, it is written, evicted, and versioned together with it: an application can
+rely on "the body is present, therefore its metadata is present", which a second
+cache entry keyed off `cacheable.key` cannot guarantee.
+
+The Hash is serialized with MessagePack, so keys and values must be MessagePack
+types and come back with String keys. Application metadata is nested under
+`ResponseBank::APP_METADATA_KEY` inside the entry so it cannot collide with
+ResponseBank's own slots such as `brotli_splice`.
+
 ## Brotli Splice Slots
 
 Applications that need per-request replacement inside cached Brotli HTML responses can pass an injector builder to `ResponseBank::Middleware`:
