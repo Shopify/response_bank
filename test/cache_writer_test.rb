@@ -126,8 +126,6 @@ class ResponseBankCacheWriterTest < Minitest::Test
     )
   end
 
-  private
-
   def test_store_nests_application_metadata_in_the_entry
     @env[ResponseBank::METADATA_ENV_KEY] = { 'rollout_exposures' => { 'flag' => 'product_viewed' } }
 
@@ -182,6 +180,7 @@ class ResponseBankCacheWriterTest < Minitest::Test
 
   def test_store_ignores_application_metadata_that_is_not_a_hash
     @env[ResponseBank::METADATA_ENV_KEY] = 'oops'
+    ResponseBank.stubs(:log)
     ResponseBank.expects(:log).with(includes('cacheable.metadata')).once
 
     cache_writer.store(
@@ -196,6 +195,8 @@ class ResponseBankCacheWriterTest < Minitest::Test
     payload = MessagePack.load(ResponseBank.cache_store.read('store_cache_key', raw: true))
     assert_equal(5, payload.length)
   end
+
+  private
 
   def cache_writer
     ResponseBank.const_get(:CacheWriter, false)

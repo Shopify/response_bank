@@ -159,10 +159,6 @@ module ResponseBank
         # version check
         # unversioned but tolerance threshold
         # regen
-        if metadata&.key?(ResponseBank::APP_METADATA_KEY)
-          @env[ResponseBank::METADATA_ENV_KEY] = metadata[ResponseBank::APP_METADATA_KEY]
-        end
-
         @headers.merge!(headers)
 
         if @headers['Content-Encoding']
@@ -178,6 +174,16 @@ module ResponseBank
           end
         else
           ResponseBank.log("Cache hit, but missing content-encoding in the cache value headers, maybe because of 301 or 404 response or empty body string")
+        end
+
+        # Published last: decompression and Brotli replacement above can raise, and the
+        # fallback refill must not inherit metadata from the entry it is replacing. The
+        # slot always reflects the served entry, so a value set earlier in the request
+        # is dropped when the entry carries none.
+        if metadata&.key?(ResponseBank::APP_METADATA_KEY)
+          @env[ResponseBank::METADATA_ENV_KEY] = metadata[ResponseBank::APP_METADATA_KEY]
+        else
+          @env.delete(ResponseBank::METADATA_ENV_KEY)
         end
 
         [status, @headers, [body]]

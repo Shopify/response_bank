@@ -276,6 +276,29 @@ class ResponseCacheHandlerTest < Minitest::Test
     refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
   end
 
+  def test_server_cache_hit_replaces_application_metadata_set_earlier_in_the_request
+    controller.request.env[ResponseBank::METADATA_ENV_KEY] = { 'stale' => true }
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
+    expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_cache_miss(false, 'server')
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
+  end
+
+  def test_decompression_failure_does_not_publish_the_rejected_entrys_application_metadata
+    metadata = { 'app' => { 'rollout_exposures' => { 'flag' => 'product_viewed' } } }
+    @cache_store.expects(:read).returns(page_cache_entry_with_metadata(true, metadata))
+    controller.request.env['HTTP_ACCEPT_ENCODING'] = 'gzip'
+    ResponseBank.expects(:decompress).raises(Brotli::Error.new("decompression failed"))
+    ResponseBank.stubs(:log)
+
+    _, _, body = handler.run!
+
+    assert_equal('dynamic output', body)
+    assert_cache_miss(true, :anything)
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
+  end
+
   def test_server_recent_cache_hit_exposes_the_stale_entrys_application_metadata
     @controller.stubs(:cache_age_tolerance_in_seconds).returns(999999999999)
     ResponseBank.expects(:acquire_lock).with(handler.entity_tag_hash).returns(false)

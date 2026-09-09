@@ -161,11 +161,14 @@ env['cacheable.metadata'] = { 'rollout_exposures' => { flag => event_name } }
 
 On a server cache hit, `env['cacheable.metadata']` holds the Hash that was stored
 with the entry actually being served, including stale entries served while a
-revalidation is in flight. The key is absent when the entry carries no
-application metadata. Because the metadata is part of the same cache item as the
-body, it is written, evicted, and versioned together with it: an application can
-rely on "the body is present, therefore its metadata is present", which a second
-cache entry keyed off `cacheable.key` cannot guarantee.
+revalidation is in flight. The slot always reflects the served entry: it is
+removed when the entry carries no application metadata, even if the application
+set it earlier in the request, and it is only published once the cached response
+has been prepared, so a hit that falls back to a refill never carries the rejected
+entry's metadata into the new one. Because the metadata is part of the same cache
+item as the body, it is written, evicted, and versioned together with it: an
+application can rely on "the body is present, therefore its metadata is present",
+which a second cache entry keyed off `cacheable.key` cannot guarantee.
 
 The Hash is serialized with MessagePack, so keys and values must be MessagePack
 types and come back with String keys. Application metadata is nested under
