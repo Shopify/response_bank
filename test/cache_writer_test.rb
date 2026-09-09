@@ -224,7 +224,7 @@ class ResponseBankCacheWriterTest < Minitest::Test
   end
 
   def test_store_nests_application_metadata_in_the_entry
-    @env[ResponseBank::METADATA_ENV_KEY] = { 'rollout_exposures' => { 'flag' => 'product_viewed' } }
+    @env[ResponseBank::METADATA_ENV_KEY] = { 'variant' => 'b' }
 
     cache_writer.store(
       @env,
@@ -237,7 +237,7 @@ class ResponseBankCacheWriterTest < Minitest::Test
 
     payload = MessagePack.load(ResponseBank.cache_store.read('store_cache_key', raw: true))
     assert_equal(6, payload.length)
-    assert_equal({ 'app' => { 'rollout_exposures' => { 'flag' => 'product_viewed' } } }, payload[5])
+    assert_equal({ 'app' => { 'variant' => 'b' } }, payload[5])
   end
 
   def test_store_keeps_the_entry_shape_without_application_metadata
@@ -259,7 +259,7 @@ class ResponseBankCacheWriterTest < Minitest::Test
       placeholder: '00000000-0000-0000-0000-000000000000',
       replacement: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
     )
-    @env[ResponseBank::METADATA_ENV_KEY] = { 'rollout_exposures' => {} }
+    @env[ResponseBank::METADATA_ENV_KEY] = { 'variant' => 'a' }
 
     cache_writer.store(
       @env,
@@ -271,7 +271,7 @@ class ResponseBankCacheWriterTest < Minitest::Test
     )
 
     metadata = MessagePack.load(ResponseBank.cache_store.read('store_cache_key', raw: true))[5]
-    assert_equal({ 'rollout_exposures' => {} }, metadata['app'])
+    assert_equal({ 'variant' => 'a' }, metadata['app'])
     assert_equal('shopify_y', metadata.dig('brotli_splice', 'slots', 0, 'name'))
   end
 
