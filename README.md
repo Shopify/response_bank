@@ -155,7 +155,7 @@ Applications can store a Hash inside a cache entry by setting
 `env['cacheable.metadata']` before the response is stored:
 
 ```ruby
-env['cacheable.metadata'] = { 'rollout_exposures' => { flag => event_name } }
+env['cacheable.metadata'] = { 'variant' => 'b' }
 ```
 
 On a server cache hit, `env['cacheable.metadata']` holds the Hash stored with the

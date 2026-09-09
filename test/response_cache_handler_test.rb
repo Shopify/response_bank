@@ -260,12 +260,12 @@ class ResponseCacheHandlerTest < Minitest::Test
   end
 
   def test_server_cache_hit_exposes_the_served_entrys_application_metadata
-    metadata = { 'app' => { 'rollout_exposures' => { 'flag' => 'product_viewed' } } }
+    metadata = { 'app' => { 'variant' => 'b' } }
     @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry_with_metadata(true, metadata))
     expect_page_rendered(page(true, 'br'), 'br')
 
     assert_cache_miss(false, 'server')
-    assert_equal({ 'rollout_exposures' => { 'flag' => 'product_viewed' } }, controller.request.env[ResponseBank::METADATA_ENV_KEY])
+    assert_equal({ 'variant' => 'b' }, controller.request.env[ResponseBank::METADATA_ENV_KEY])
   end
 
   def test_server_cache_hit_leaves_application_metadata_unset_when_the_entry_has_none
@@ -286,7 +286,7 @@ class ResponseCacheHandlerTest < Minitest::Test
   end
 
   def test_decompression_failure_does_not_publish_the_rejected_entrys_application_metadata
-    metadata = { 'app' => { 'rollout_exposures' => { 'flag' => 'product_viewed' } } }
+    metadata = { 'app' => { 'variant' => 'b' } }
     @cache_store.expects(:read).returns(page_cache_entry_with_metadata(true, metadata))
     controller.request.env['HTTP_ACCEPT_ENCODING'] = 'gzip'
     ResponseBank.expects(:decompress).raises(Brotli::Error.new("decompression failed"))
@@ -302,18 +302,18 @@ class ResponseCacheHandlerTest < Minitest::Test
   def test_server_recent_cache_hit_exposes_the_stale_entrys_application_metadata
     @controller.stubs(:cache_age_tolerance_in_seconds).returns(999999999999)
     ResponseBank.expects(:acquire_lock).with(handler.entity_tag_hash).returns(false)
-    metadata = { 'app' => { 'rollout_exposures' => { 'flag' => 'stale_event' } } }
+    metadata = { 'app' => { 'variant' => 'stale' } }
     @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry_with_metadata(false, metadata))
     expect_page_rendered(page(false, 'br'), 'br')
 
     assert_cache_miss(false, 'server')
-    assert_equal({ 'rollout_exposures' => { 'flag' => 'stale_event' } }, controller.request.env[ResponseBank::METADATA_ENV_KEY])
+    assert_equal({ 'variant' => 'stale' }, controller.request.env[ResponseBank::METADATA_ENV_KEY])
   end
 
   def test_server_recent_cache_miss_does_not_expose_the_stale_entrys_application_metadata
     @controller.stubs(:cache_age_tolerance_in_seconds).returns(999999999999)
     ResponseBank.expects(:acquire_lock).with(handler.entity_tag_hash).returns(true)
-    metadata = { 'app' => { 'rollout_exposures' => { 'flag' => 'stale_event' } } }
+    metadata = { 'app' => { 'variant' => 'stale' } }
     @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry_with_metadata(false, metadata))
 
     _, _, body = handler.run!

@@ -70,12 +70,12 @@ class ResponseBankDeferredStoreTest < Minitest::Test
       status: 200,
       headers: { 'Content-Type' => 'text/plain' },
     )
-    @env[ResponseBank::METADATA_ENV_KEY] = { 'rollout_exposures' => { 'flag' => 'page_viewed' } }
+    @env[ResponseBank::METADATA_ENV_KEY] = { 'variant' => 'b' }
 
     assert(store.complete(body: 'Hi'))
 
     payload = MessagePack.load(ResponseBank.cache_store.read('store_cache_key', raw: true))
-    assert_equal({ 'app' => { 'rollout_exposures' => { 'flag' => 'page_viewed' } } }, payload[5])
+    assert_equal({ 'app' => { 'variant' => 'b' } }, payload[5])
   end
 
   def test_abort_releases_an_owned_lock_once
