@@ -176,6 +176,14 @@ module ResponseBank
           ResponseBank.log("Cache hit, but missing content-encoding in the cache value headers, maybe because of 301 or 404 response or empty body string")
         end
 
+        # After decompression and splicing, so a refill never inherits the rejected
+        # entry's metadata; cleared when the served entry has none.
+        if metadata&.key?(ResponseBank::APP_METADATA_KEY)
+          @env[ResponseBank::METADATA_ENV_KEY] = metadata[ResponseBank::APP_METADATA_KEY]
+        else
+          @env.delete(ResponseBank::METADATA_ENV_KEY)
+        end
+
         [status, @headers, [body]]
 
       end

@@ -149,6 +149,22 @@ The headers passed to `complete` describe the cached representation. They can di
 
 `abort` is idempotent and releases an owned fill lock through `ResponseBank.release_lock`. Its default implementation is a no-op. The existing `write_to_cache` hook remains responsible for cleanup after a write attempt. An integration that releases those fills from `write_to_cache` should also implement `release_lock` for abandoned fills and failures that happen before the write hook. A key-only lock cannot prevent an old fill from releasing a replacement lock after its lease expires; integrations that need that guarantee must use owner tokens in their lock implementation.
 
+## Cache Entry Metadata
+
+Applications can store a Hash inside a cache entry by setting
+`env['cacheable.metadata']` before the response is stored:
+
+```ruby
+env['cacheable.metadata'] = { 'variant' => 'b' }
+```
+
+On a server cache hit, `env['cacheable.metadata']` holds the Hash stored with the
+served entry, stale or fresh; the key is removed when the entry has none. The Hash
+is stored once and shared by every request served from the entry, so it must not
+contain anything visitor-specific. It is serialized with MessagePack (String keys on
+read; unserializable values are logged and the metadata dropped) and nested under
+`ResponseBank::APP_METADATA_KEY`, so it cannot collide with ResponseBank's own slots.
+
 ## Brotli Splice Slots
 
 Applications that need per-request replacement inside cached Brotli HTML responses can pass an injector builder to `ResponseBank::Middleware`:

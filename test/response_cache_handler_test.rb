@@ -39,6 +39,10 @@ class ResponseCacheHandlerTest < Minitest::Test
     MessagePack.dump(page(cache_hit, compression))
   end
 
+  def page_cache_entry_with_metadata(cache_hit, metadata)
+    MessagePack.dump(page(cache_hit, 'br') + [7, metadata])
+  end
+
   def spliced_page_cache_entry(cache_hit = true)
     etag = cache_hit ? handler.entity_tag_hash : "not-cached"
     html = '<html><head><meta name="shopify-y" content="00000000-0000-0000-0000-000000000000##"></head><body>cached output</body></html>'
@@ -253,6 +257,70 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert_includes(decoded_body, '00000000-0000-0000-0000-000000000000')
     refute_includes(decoded_body, 'too-short')
     assert_cache_miss(false, 'server')
+  end
+
+  def test_server_cache_hit_exposes_the_served_entrys_application_metadata
+    metadata = { 'app' => { 'variant' => 'b' } }
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry_with_metadata(true, metadata))
+    expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_cache_miss(false, 'server')
+    assert_equal({ 'variant' => 'b' }, controller.request.env[ResponseBank::METADATA_ENV_KEY])
+  end
+
+  def test_server_cache_hit_leaves_application_metadata_unset_when_the_entry_has_none
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
+    expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_cache_miss(false, 'server')
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
+  end
+
+  def test_server_cache_hit_replaces_application_metadata_set_earlier_in_the_request
+    controller.request.env[ResponseBank::METADATA_ENV_KEY] = { 'stale' => true }
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
+    expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_cache_miss(false, 'server')
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
+  end
+
+  def test_decompression_failure_does_not_publish_the_rejected_entrys_application_metadata
+    metadata = { 'app' => { 'variant' => 'b' } }
+    @cache_store.expects(:read).returns(page_cache_entry_with_metadata(true, metadata))
+    controller.request.env['HTTP_ACCEPT_ENCODING'] = 'gzip'
+    ResponseBank.expects(:decompress).raises(Brotli::Error.new("decompression failed"))
+    ResponseBank.stubs(:log)
+
+    _, _, body = handler.run!
+
+    assert_equal('dynamic output', body)
+    assert_cache_miss(true, :anything)
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
+  end
+
+  def test_server_recent_cache_hit_exposes_the_stale_entrys_application_metadata
+    @controller.stubs(:cache_age_tolerance_in_seconds).returns(999999999999)
+    ResponseBank.expects(:acquire_lock).with(handler.entity_tag_hash).returns(false)
+    metadata = { 'app' => { 'variant' => 'stale' } }
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry_with_metadata(false, metadata))
+    expect_page_rendered(page(false, 'br'), 'br')
+
+    assert_cache_miss(false, 'server')
+    assert_equal({ 'variant' => 'stale' }, controller.request.env[ResponseBank::METADATA_ENV_KEY])
+  end
+
+  def test_server_recent_cache_miss_does_not_expose_the_stale_entrys_application_metadata
+    @controller.stubs(:cache_age_tolerance_in_seconds).returns(999999999999)
+    ResponseBank.expects(:acquire_lock).with(handler.entity_tag_hash).returns(true)
+    metadata = { 'app' => { 'variant' => 'stale' } }
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry_with_metadata(false, metadata))
+
+    _, _, body = handler.run!
+
+    assert_equal('dynamic output', body)
+    assert_cache_miss(true, 'server')
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
   end
 
   def test_server_recent_cache_hit
