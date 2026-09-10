@@ -114,12 +114,20 @@ module ResponseBank
         data
       end
 
-      # A non-Hash value is logged and skipped rather than failing the write.
+      # Application metadata never fails the write: anything that is not a Hash, or
+      # that MessagePack cannot serialize, is logged and left out of the entry.
       def entry_metadata(env, metadata)
         app_metadata = env[ResponseBank::METADATA_ENV_KEY]
         return metadata if app_metadata.nil?
         unless app_metadata.is_a?(Hash)
           ResponseBank.log("Ignoring #{ResponseBank::METADATA_ENV_KEY}: expected a Hash, got #{app_metadata.class}")
+          return metadata
+        end
+
+        begin
+          MessagePack.dump(app_metadata)
+        rescue StandardError => error
+          ResponseBank.log("Ignoring #{ResponseBank::METADATA_ENV_KEY}: #{error.class} - #{error.message}")
           return metadata
         end
 

@@ -160,7 +160,9 @@ env['cacheable.metadata'] = { 'variant' => 'b' }
 
 On a server cache hit, `env['cacheable.metadata']` holds the Hash stored with the
 served entry, stale or fresh; the key is removed when the entry has none. The Hash
-is serialized with MessagePack (String keys on read) and nested under
+is stored once and shared by every request served from the entry, so it must not
+contain anything visitor-specific. It is serialized with MessagePack (String keys on
+read; unserializable values are logged and the metadata dropped) and nested under
 `ResponseBank::APP_METADATA_KEY`, so it cannot collide with ResponseBank's own slots.
 
 ## Brotli Splice Slots

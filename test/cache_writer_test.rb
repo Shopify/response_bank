@@ -143,6 +143,24 @@ class ResponseBankCacheWriterTest < Minitest::Test
     assert_equal({ 'app' => { 'variant' => 'b' } }, payload[5])
   end
 
+  def test_store_ignores_application_metadata_that_cannot_be_serialized
+    @env[ResponseBank::METADATA_ENV_KEY] = { 'when' => Object.new }
+    ResponseBank.stubs(:log)
+    ResponseBank.expects(:log).with(includes('cacheable.metadata')).once
+
+    cache_writer.store(
+      @env,
+      status: 200,
+      headers: { 'Content-Type' => 'text/plain' },
+      body: 'Hi',
+      timestamp: 424242,
+      content_encoding: 'gzip',
+    )
+
+    payload = MessagePack.load(ResponseBank.cache_store.read('store_cache_key', raw: true))
+    assert_equal(5, payload.length)
+  end
+
   def test_store_keeps_the_entry_shape_without_application_metadata
     cache_writer.store(
       @env,
