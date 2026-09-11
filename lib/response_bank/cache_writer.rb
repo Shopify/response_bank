@@ -30,20 +30,61 @@ module ResponseBank
         content_encoding: env.fetch('response_bank.server_cache_encoding'),
         before_write: nil
       )
-        cache_key = env.fetch('cacheable.key')
-        unversioned_key = env.fetch('cacheable.unversioned-key')
-        representation_headers = headers.slice(*ResponseBank::CACHEABLE_HEADERS)
-        representation_headers['ETag'] = %{"#{cache_key}"}
+        representation_headers = representation_headers(env, headers)
         stored = prepare_body(env, representation_headers, body, content_encoding)
+        persist(
+          env,
+          status: status,
+          representation_headers: representation_headers,
+          stored: stored,
+          timestamp: timestamp,
+          content_encoding: content_encoding,
+          before_write: before_write,
+        )
+      end
+
+      def store_spliced(
+        env,
+        status:,
+        headers:,
+        body:,
+        compression_level:,
+        slot: nil,
+        timestamp:,
+        before_write: nil
+      )
+        validate_spliced_body!(env, body)
+        metadata = slot && BrotliSpliceSlot.metadata_for(**slot)
+        env['cacheable.compression_level'] = compression_level
+        persist(
+          env,
+          status: status,
+          representation_headers: representation_headers(env, headers),
+          stored: Stored.new(body: nil, compressed_body: body, metadata: metadata),
+          timestamp: timestamp,
+          content_encoding: 'br',
+          before_write: before_write,
+        )
+      end
+
+      private
+
+      def representation_headers(env, headers)
+        headers.slice(*ResponseBank::CACHEABLE_HEADERS).tap do |cached_headers|
+          cached_headers['ETag'] = %{"#{env.fetch('cacheable.key')}"}
+        end
+      end
+
+      def persist(env, status:, representation_headers:, stored:, timestamp:, content_encoding:, before_write:)
         generated_at = timestamp.respond_to?(:call) ? timestamp.call : timestamp
         data = cache_data(status, representation_headers, stored, env, generated_at, content_encoding)
 
         before_write&.call
-        ResponseBank.write_to_cache(cache_key) do
+        ResponseBank.write_to_cache(env.fetch('cacheable.key')) do
           payload = MessagePack.dump(data)
           ResponseBank.write_to_backing_cache_store(
             env,
-            unversioned_key,
+            env.fetch('cacheable.unversioned-key'),
             payload,
             expires_in: env['cacheable.versioned-cache-expiry'],
           )
@@ -52,7 +93,14 @@ module ResponseBank
         stored
       end
 
-      private
+      def validate_spliced_body!(env, body)
+        unless body.is_a?(String) && !body.empty?
+          raise ArgumentError, 'spliced body must be a non-empty String'
+        end
+        return if env.fetch('response_bank.server_cache_encoding') == 'br'
+
+        raise ArgumentError, 'spliced bodies require br server cache encoding'
+      end
 
       def prepare_body(env, headers, body, content_encoding)
         body = flatten(body)

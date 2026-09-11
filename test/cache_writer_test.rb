@@ -100,6 +100,103 @@ class ResponseBankCacheWriterTest < Minitest::Test
     assert_equal('Hi!', stored.body)
   end
 
+  def test_store_spliced_accepts_a_cache_safe_brotli_body
+    compressed_body = ResponseBank.compress('already compressed', 'br')
+    slot = {
+      name: 'shopify_y',
+      compressed_offset: 1,
+      replacement_length: 2,
+      html_placeholder_offset: 10,
+      html_placeholder_length: 4,
+      context_suffix: "\r\n",
+    }
+    ResponseBank.expects(:compress).never
+    ResponseBank.expects(:log).never
+
+    stored = cache_writer.store_spliced(
+      @env,
+      status: 200,
+      headers: { 'Content-Type' => 'text/html' },
+      body: compressed_body,
+      compression_level: 5,
+      slot: slot,
+      timestamp: 424242,
+    )
+
+    assert_nil(stored.body)
+    assert_equal(compressed_body, stored.compressed_body)
+    assert_equal(5, @env['cacheable.compression_level'])
+    payload = MessagePack.load(ResponseBank.cache_store.read('store_cache_key', raw: true))
+    assert_equal(
+      [
+        200,
+        { 'Content-Type' => 'text/html', 'ETag' => '"etag_value"', 'Content-Encoding' => 'br' },
+        compressed_body,
+        424242,
+        5,
+        {
+          'brotli_splice' => {
+            'version' => 1,
+            'slots' => [{
+              'name' => 'shopify_y',
+              'compressed_offset' => 1,
+              'replacement_length' => 2,
+              'html_placeholder_offset' => 10,
+              'html_placeholder_length' => 4,
+              'context_suffix' => "\r\n",
+            }],
+          },
+        },
+      ],
+      payload,
+    )
+  end
+
+  def test_store_spliced_accepts_a_body_without_a_slot
+    compressed_body = ResponseBank.compress('already compressed', 'br')
+
+    cache_writer.store_spliced(
+      @env,
+      status: 200,
+      headers: {},
+      body: compressed_body,
+      compression_level: 5,
+      timestamp: 424242,
+    )
+
+    payload = MessagePack.load(ResponseBank.cache_store.read('store_cache_key', raw: true))
+    assert_equal(5, payload.length)
+    assert_equal(compressed_body, payload[2])
+  end
+
+  def test_store_spliced_rejects_the_wrong_server_cache_encoding
+    @env['response_bank.server_cache_encoding'] = 'gzip'
+
+    assert_raises(ArgumentError) do
+      cache_writer.store_spliced(
+        @env,
+        status: 200,
+        headers: {},
+        body: 'already compressed',
+        compression_level: 5,
+        timestamp: 424242,
+      )
+    end
+  end
+
+  def test_store_spliced_rejects_missing_bytes
+    assert_raises(ArgumentError) do
+      cache_writer.store_spliced(
+        @env,
+        status: 200,
+        headers: {},
+        body: '',
+        compression_level: 5,
+        timestamp: 424242,
+      )
+    end
+  end
+
   def test_store_keeps_only_cacheable_headers
     cache_writer.store(
       @env,
