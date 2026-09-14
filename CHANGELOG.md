@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+- `DeferredStore#complete_spliced` for storing complete Brotli bodies without a
+  second compression pass. ResponseBank serializes optional splice metadata
+  using the existing cache format ([#118]).
+
 ## [1.4.0] - 2026-08-11
 
 ### Added
@@ -41,3 +48,4 @@ Releases prior to 1.3.8 are recorded in the project's git tags and GitHub Releas
 [#102]: https://github.com/Shopify/response_bank/pull/102
 [#103]: https://github.com/Shopify/response_bank/pull/103
 [#112]: https://github.com/Shopify/response_bank/pull/112
+[#118]: https://github.com/Shopify/response_bank/pull/118

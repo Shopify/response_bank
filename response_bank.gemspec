@@ -28,7 +28,7 @@ Gem::Specification.new do |s|
   # to their own Gemfile -- see README). It is a development dependency here so the
   # gem's own test suite, which exercises the splice path directly, can load it --
   # including the actionpack matrix gemfiles in CI, which inherit it through gemspec.
-  s.add_development_dependency("brotli_splice", "= 0.1.1")
+  s.add_development_dependency("brotli_splice", "= 0.2.0")
 
   s.add_development_dependency("minitest")
   s.add_development_dependency("mocha")

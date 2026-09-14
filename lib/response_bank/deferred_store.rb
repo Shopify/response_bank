@@ -60,32 +60,33 @@ module ResponseBank
     # `body` and `headers` must describe the complete shared cache representation,
     # not a partial response or bytes personalized for the live client.
     def complete(body:, headers: nil)
-      status, cached_headers, release_lock = prepare_completion(headers)
-
-      if release_lock
-        release_owned_lock
-        return false
-      end
-      return false unless status
-
-      write_started = false
-      completed = false
-      begin
+      complete_with(headers) do |status, cached_headers, before_write|
         CacheWriter.store(
           @env,
           status: status,
           headers: cached_headers,
           body: body,
           timestamp: @timestamp,
-          before_write: -> { write_started = true },
+          before_write: before_write,
         )
-        completed = true
-      ensure
-        @mutex.synchronize { @state = :consumed }
-        @env['cacheable.locked'] = false if @owns_lock
-        release_owned_lock if @owns_lock && !completed && !write_started
       end
-      true
+    end
+
+    # `body` must be a complete Brotli stream that is already safe for shared
+    # caching. If present, `slot` describes its neutral replacement slot.
+    def complete_spliced(body:, compression_level:, slot: nil, headers: nil)
+      complete_with(headers) do |status, cached_headers, before_write|
+        CacheWriter.store_spliced(
+          @env,
+          status: status,
+          headers: cached_headers,
+          body: body,
+          compression_level: compression_level,
+          slot: slot,
+          timestamp: @timestamp,
+          before_write: before_write,
+        )
+      end
     end
 
     def abort
@@ -103,6 +104,28 @@ module ResponseBank
     end
 
     private
+
+    def complete_with(headers)
+      status, cached_headers, release_lock = prepare_completion(headers)
+
+      if release_lock
+        release_owned_lock
+        return false
+      end
+      return false unless status
+
+      write_started = false
+      completed = false
+      begin
+        yield(status, cached_headers, -> { write_started = true })
+        completed = true
+      ensure
+        @mutex.synchronize { @state = :consumed }
+        @env['cacheable.locked'] = false if @owns_lock
+        release_owned_lock if @owns_lock && !completed && !write_started
+      end
+      true
+    end
 
     def arm(status:, headers:)
       @mutex.synchronize do

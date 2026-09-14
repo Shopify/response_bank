@@ -40,29 +40,45 @@ module ResponseBank
         begin
           result = BrotliSplice.encode(prepared_body, html_offset, html_length, quality: compression_level)
 
-          metadata_slot = {
-            'name' => slot_name,
-            'compressed_offset' => result[:secret_offset],
-            'replacement_length' => result[:secret_length],
-            'html_placeholder_offset' => html_offset,
-            'html_placeholder_length' => html_length,
-          }
-          metadata_slot['context_suffix'] = result[:context_suffix] if result[:context_suffix]
-
           EncodedBody.new(
             body: prepared_body,
             compressed_body: result[:data],
-            metadata: {
-              METADATA_KEY => {
-                'version' => METADATA_VERSION,
-                'slots' => [metadata_slot],
-              },
-            },
+            metadata: metadata_for(
+              name: slot_name,
+              compressed_offset: result[:secret_offset],
+              replacement_length: result[:secret_length],
+              html_placeholder_offset: html_offset,
+              html_placeholder_length: html_length,
+              context_suffix: result[:context_suffix],
+            ),
           )
         rescue BrotliSplice::Error, ArgumentError => error
           ResponseBank.log("BrotliSplice encode skipped: #{error.class}")
           nil
         end
+      end
+
+      def metadata_for(
+        name:,
+        compressed_offset:,
+        replacement_length:,
+        html_placeholder_offset:,
+        html_placeholder_length:,
+        context_suffix:
+      )
+        {
+          METADATA_KEY => {
+            'version' => METADATA_VERSION,
+            'slots' => [{
+              'name' => name.to_s,
+              'compressed_offset' => compressed_offset,
+              'replacement_length' => replacement_length,
+              'html_placeholder_offset' => html_placeholder_offset,
+              'html_placeholder_length' => html_placeholder_length,
+              'context_suffix' => context_suffix,
+            }],
+          },
+        }
       end
 
       def replace_compressed_secret(env, body, metadata)
