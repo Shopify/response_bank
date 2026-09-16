@@ -78,6 +78,28 @@ class ResponseCacheHandlerTest < Minitest::Test
     ResponseBank.cache_store = previous_cache_store
   end
 
+  def page_cache_entry_stored_with(app_metadata)
+    previous_cache_store = ResponseBank.cache_store
+    env = Rack::MockRequest.env_for('http://example.com/')
+    env['response_bank.server_cache_encoding'] = 'br'
+    env['cacheable.key'] = handler.entity_tag_hash
+    env['cacheable.unversioned-key'] = 'stored-entry'
+    env[ResponseBank::METADATA_ENV_KEY] = app_metadata
+    cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
+    ResponseBank.cache_store = cache_store
+
+    ResponseBank.const_get(:CacheWriter, false).store(
+      env,
+      status: 200,
+      headers: { 'Content-Type' => 'text/html' },
+      body: '<body>cached output</body>',
+      timestamp: 1331765506,
+    )
+    cache_store.read('stored-entry', raw: true)
+  ensure
+    ResponseBank.cache_store = previous_cache_store
+  end
+
   def page_uncompressed(cache_hit = true)
     etag = cache_hit ? handler.entity_tag_hash : "not-cached"
     [200, {"Content-Type" => "text/html", "ETag" => %{"#{etag}"}}, "<body>cached output</body>", 1331765506]
@@ -324,6 +346,15 @@ class ResponseCacheHandlerTest < Minitest::Test
 
     assert_equal('dynamic output', body)
     assert_cache_miss(true, 'server')
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
+  end
+
+  def test_server_cache_hit_serves_an_entry_stored_with_application_metadata_the_reader_cannot_load
+    entry = page_cache_entry_stored_with(application_metadata_the_reader_cannot_load)
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(entry)
+    expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_cache_miss(false, 'server')
     refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
   end
 
