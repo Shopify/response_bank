@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-09-17
+
+### Added
+- Application metadata stored inside the cache entry: a Hash set in
+  `env['cacheable.metadata']` before the response is stored travels with the
+  cached body and is exposed under the same key on a server cache hit, fresh or
+  stale. Entries without it keep the existing cache format. Constants
+  `ResponseBank::METADATA_ENV_KEY` and `ResponseBank::APP_METADATA_KEY` ([#119]).
+
 ## [1.5.0] - 2026-09-14
 
 ### Added
@@ -43,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Releases prior to 1.3.8 are recorded in the project's git tags and GitHub Releases.
 
+[1.6.0]: https://github.com/Shopify/response_bank/releases/tag/v1.6.0
 [1.5.0]: https://github.com/Shopify/response_bank/releases/tag/v1.5.0
 [1.4.0]: https://github.com/Shopify/response_bank/releases/tag/v1.4.0
 [1.3.8]: https://github.com/Shopify/response_bank/releases/tag/v1.3.8
@@ -50,3 +60,4 @@ Releases prior to 1.3.8 are recorded in the project's git tags and GitHub Releas
 [#103]: https://github.com/Shopify/response_bank/pull/103
 [#112]: https://github.com/Shopify/response_bank/pull/112
 [#118]: https://github.com/Shopify/response_bank/pull/118
+[#119]: https://github.com/Shopify/response_bank/pull/119
