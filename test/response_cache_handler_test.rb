@@ -39,6 +39,10 @@ class ResponseCacheHandlerTest < Minitest::Test
     MessagePack.dump(page(cache_hit, compression))
   end
 
+  def page_cache_entry_with_metadata(cache_hit, metadata)
+    MessagePack.dump(page(cache_hit, 'br') + [7, metadata])
+  end
+
   def spliced_page_cache_entry(cache_hit = true)
     previous_cache_store = ResponseBank.cache_store
     etag = cache_hit ? handler.entity_tag_hash : "not-cached"
@@ -70,6 +74,28 @@ class ResponseCacheHandlerTest < Minitest::Test
       timestamp: 1331765506,
     )
     cache_store.read('encoded-spliced-entry', raw: true)
+  ensure
+    ResponseBank.cache_store = previous_cache_store
+  end
+
+  def page_cache_entry_stored_with(app_metadata)
+    previous_cache_store = ResponseBank.cache_store
+    env = Rack::MockRequest.env_for('http://example.com/')
+    env['response_bank.server_cache_encoding'] = 'br'
+    env['cacheable.key'] = handler.entity_tag_hash
+    env['cacheable.unversioned-key'] = 'stored-entry'
+    env[ResponseBank::METADATA_ENV_KEY] = app_metadata
+    cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
+    ResponseBank.cache_store = cache_store
+
+    ResponseBank.const_get(:CacheWriter, false).store(
+      env,
+      status: 200,
+      headers: { 'Content-Type' => 'text/html' },
+      body: '<body>cached output</body>',
+      timestamp: 1331765506,
+    )
+    cache_store.read('stored-entry', raw: true)
   ensure
     ResponseBank.cache_store = previous_cache_store
   end
@@ -257,6 +283,79 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert_includes(decoded_body, '00000000-0000-0000-0000-000000000000')
     refute_includes(decoded_body, 'too-short')
     assert_cache_miss(false, 'server')
+  end
+
+  def test_server_cache_hit_exposes_the_served_entrys_application_metadata
+    metadata = { 'app' => { 'variant' => 'b' } }
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry_with_metadata(true, metadata))
+    expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_cache_miss(false, 'server')
+    assert_equal({ 'variant' => 'b' }, controller.request.env[ResponseBank::METADATA_ENV_KEY])
+  end
+
+  def test_server_cache_hit_leaves_application_metadata_unset_when_the_entry_has_none
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
+    expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_cache_miss(false, 'server')
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
+  end
+
+  def test_server_cache_hit_replaces_application_metadata_set_earlier_in_the_request
+    controller.request.env[ResponseBank::METADATA_ENV_KEY] = { 'stale' => true }
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
+    expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_cache_miss(false, 'server')
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
+  end
+
+  def test_decompression_failure_does_not_publish_the_rejected_entrys_application_metadata
+    metadata = { 'app' => { 'variant' => 'b' } }
+    @cache_store.expects(:read).returns(page_cache_entry_with_metadata(true, metadata))
+    controller.request.env['HTTP_ACCEPT_ENCODING'] = 'gzip'
+    ResponseBank.expects(:decompress).raises(Brotli::Error.new("decompression failed"))
+    ResponseBank.stubs(:log)
+
+    _, _, body = handler.run!
+
+    assert_equal('dynamic output', body)
+    assert_cache_miss(true, :anything)
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
+  end
+
+  def test_server_recent_cache_hit_exposes_the_stale_entrys_application_metadata
+    @controller.stubs(:cache_age_tolerance_in_seconds).returns(999999999999)
+    ResponseBank.expects(:acquire_lock).with(handler.entity_tag_hash).returns(false)
+    metadata = { 'app' => { 'variant' => 'stale' } }
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry_with_metadata(false, metadata))
+    expect_page_rendered(page(false, 'br'), 'br')
+
+    assert_cache_miss(false, 'server')
+    assert_equal({ 'variant' => 'stale' }, controller.request.env[ResponseBank::METADATA_ENV_KEY])
+  end
+
+  def test_server_recent_cache_miss_does_not_expose_the_stale_entrys_application_metadata
+    @controller.stubs(:cache_age_tolerance_in_seconds).returns(999999999999)
+    ResponseBank.expects(:acquire_lock).with(handler.entity_tag_hash).returns(true)
+    metadata = { 'app' => { 'variant' => 'stale' } }
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry_with_metadata(false, metadata))
+
+    _, _, body = handler.run!
+
+    assert_equal('dynamic output', body)
+    assert_cache_miss(true, 'server')
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
+  end
+
+  def test_server_cache_hit_serves_an_entry_stored_with_application_metadata_the_reader_cannot_load
+    entry = page_cache_entry_stored_with(application_metadata_the_reader_cannot_load)
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(entry)
+    expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_cache_miss(false, 'server')
+    refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
   end
 
   def test_server_recent_cache_hit

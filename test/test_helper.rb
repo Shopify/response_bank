@@ -19,6 +19,14 @@ require 'brotli_splice'
 
 ResponseBank.logger = Class.new { def info(a); end }.new
 
+# msgpack-ruby packs nesting of any depth but unpacks at most this many containers.
+MSGPACK_UNPACKER_STACK_CAPACITY = 128
+
+# Loads on its own, but not from a cache entry, which nests it two containers deeper.
+def application_metadata_the_reader_cannot_load
+  (MSGPACK_UNPACKER_STACK_CAPACITY - 2).times.reduce({ 'a' => 'b' }) { |inner, _| { 'a' => inner } }
+end
+
 class HtmlMetadataInjector
   include ResponseBank::BrotliSpliceInjector
 

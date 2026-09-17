@@ -157,8 +157,33 @@ module ResponseBank
         end
         cached_headers = representation_headers.slice(*ResponseBank::CACHEABLE_HEADERS)
         data = [status, cached_headers, stored.compressed_body, timestamp, env['cacheable.compression_level']]
-        data << stored.metadata if stored.metadata
+        metadata = entry_metadata(env, stored.metadata)
+        data << metadata if metadata
         data
+      end
+
+      # Application metadata never fails the write, nor the reads that follow: anything
+      # that is not a Hash, or that does not round-trip through MessagePack, is logged
+      # and left out of the entry.
+      def entry_metadata(env, metadata)
+        app_metadata = env[ResponseBank::METADATA_ENV_KEY]
+        return metadata if app_metadata.nil?
+        unless app_metadata.is_a?(Hash)
+          ResponseBank.log("Ignoring #{ResponseBank::METADATA_ENV_KEY}: expected a Hash, got #{app_metadata.class}")
+          return metadata
+        end
+
+        merged = (metadata || {}).merge(ResponseBank::APP_METADATA_KEY => app_metadata)
+        begin
+          # Loading catches what dumping accepts but the reader rejects, such as nesting
+          # past the unpacker's stack; the array puts the Hash at its depth in the entry.
+          MessagePack.load(MessagePack.dump([merged]))
+        rescue StandardError => error
+          ResponseBank.log("Ignoring #{ResponseBank::METADATA_ENV_KEY}: #{error.class} - #{error.message}")
+          return metadata
+        end
+
+        merged
       end
     end
   end

@@ -361,6 +361,24 @@ class MiddlewareTest < Minitest::Test
     assert(!headers['Content-Encoding'])
   end
 
+  def test_cache_miss_stores_application_metadata_set_by_the_app
+    ResponseBank::Middleware.any_instance.stubs(timestamp: 424242)
+    app = lambda do |env|
+      env[ResponseBank::METADATA_ENV_KEY] = { 'variant' => 'b' }
+      cacheable_app(env)
+    end
+
+    ware = ResponseBank::Middleware.new(app)
+    status, headers, body = ware.call(@env)
+
+    payload = MessagePack.load(ResponseBank.cache_store.read('cacheable_app_cache_key', raw: true))
+    assert_equal(200, status)
+    assert_equal('br', headers['Content-Encoding'])
+    assert_equal('Hi', Brotli.inflate(body.first))
+    assert_equal([200, {'Content-Type' => 'text/plain', 'ETag' => '"etag_value"', 'Content-Encoding' => 'br'}, ResponseBank.compress('Hi', 'br'), 424242, 7], payload[0..4])
+    assert_equal({ 'app' => { 'variant' => 'b' } }, payload[5])
+  end
+
   def test_cache_writer_does_not_use_the_write_hook_return_value
     ResponseBank.stubs(:write_to_cache).yields.returns(nil)
 
