@@ -134,6 +134,8 @@ module ResponseBank
 
         @env['cacheable.locked'] ||= false
 
+        stale = false
+
         # to preserve the unversioned/versioned logging messages from past releases we split the match_entity_tag test
         if match_entity_tag == "*"
           ResponseBank.log("Cache hit: server (unversioned)")
@@ -149,6 +151,7 @@ module ResponseBank
             return
           elsif stale_while_revalidate?(timestamp, cache_age_tolerance)
             # cache is being regenerated, can we avoid piling on and use a stale version in the interim?
+            stale = true
             ResponseBank.log("Cache hit: server (recent)")
           else
             ResponseBank.log("Found an unversioned cache entry, but it was too old (#{timestamp})")
@@ -184,10 +187,20 @@ module ResponseBank
           @env.delete(ResponseBank::METADATA_ENV_KEY)
         end
 
+        record_server_cache_hit(timestamp, stale: stale)
         [status, @headers, [body]]
 
       end
     end
+
+    protected
+
+    # Override to observe a cache entry that will be served. This is not called
+    # for entries rejected by version, age, or regeneration-lock checks.
+    def record_server_cache_hit(_timestamp, stale:)
+    end
+
+    private
 
     def etag_matches?(entity_tag, if_none_match)
       # Support for Etag variations including:

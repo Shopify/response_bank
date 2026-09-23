@@ -173,6 +173,7 @@ class ResponseCacheHandlerTest < Minitest::Test
   def test_server_cache_hit_return_uncompressed
     controller.request.env['response_bank.server_cache_encoding'] = 'br'
     @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
+    handler.expects(:record_server_cache_hit).with(1331765506, stale: false)
     page_decompressed = [200, {"Content-Type" => "text/html", "ETag" => handler.entity_tag_hash, "Content-Encoding" => 'br'}, "<body>cached output</body>", 1331765506]
     expect_page_rendered(page_decompressed, nil)
     assert_cache_miss(false, 'server')
@@ -362,6 +363,7 @@ class ResponseCacheHandlerTest < Minitest::Test
     @controller.stubs(:cache_age_tolerance_in_seconds).returns(999999999999)
     @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(false, 'br'))
     ResponseBank.expects(:acquire_lock).with(handler.entity_tag_hash)
+    handler.expects(:record_server_cache_hit).with(1331765506, stale: true)
     expect_page_rendered(page(false), 'br')
 
     assert_cache_miss(false, 'server')
