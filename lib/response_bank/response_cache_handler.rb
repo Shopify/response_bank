@@ -186,7 +186,8 @@ module ResponseBank
           @env.delete(ResponseBank::METADATA_ENV_KEY)
         end
 
-        notify_server_cache_hit(timestamp: timestamp, stale: stale)
+        @env['cacheable.timestamp'] = timestamp
+        @env['cacheable.stale'] = stale
         [status, @headers, [body]]
 
       end
@@ -231,12 +232,6 @@ module ResponseBank
       ResponseBank.log("Refilling cache")
 
       @cache_miss_block.call
-    end
-
-    def notify_server_cache_hit(timestamp:, stale:)
-      @env['response_bank.on_server_cache_hit']&.call(timestamp: timestamp, stale: stale)
-    rescue => handler_exception
-      ResponseBank.log("Server cache hit handler failed: #{handler_exception.class} - #{handler_exception.message}")
     end
 
     def handle_cache_exception(exception)

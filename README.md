@@ -307,15 +307,14 @@ env[ResponseBank::BrotliSpliceSlot::INJECTOR_ENV_KEY] = injector
 
 ## Observing server cache hits
 
-Applications can install a per-request callback to observe an entry that is successfully served from the server cache:
+After successfully serving an entry from the server cache, ResponseBank exposes its generation time and stale-while-revalidate status in the Rack environment:
 
 ```ruby
-env['response_bank.on_server_cache_hit'] = ->(timestamp:, stale:) {
-  CacheMetrics.record_hit(timestamp: timestamp, stale: stale)
-}
+timestamp = env['cacheable.timestamp']
+stale = env['cacheable.stale']
 ```
 
-`timestamp` is the entry's generation time and `stale` indicates whether it was served through stale-while-revalidate. The callback is not called for browser-cache hits, rejected entries, or cache misses. Exceptions raised by the callback are logged and do not reject the cached response.
+These keys are not set for browser-cache hits, rejected entries, or cache misses.
 
 ## Exception Handling
 

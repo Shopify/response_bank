@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Added
-- `env['response_bank.on_server_cache_hit']`, a per-request callback with the
-  served entry's generation timestamp and stale-while-revalidate status.
+- `env['cacheable.timestamp']` and `env['cacheable.stale']` expose the served
+  server-cache entry's generation time and stale-while-revalidate status.
 
 ## [1.6.0] - 2026-09-17
 
