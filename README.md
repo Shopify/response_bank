@@ -305,6 +305,18 @@ Advanced integrations can still install the per-request injector directly in the
 env[ResponseBank::BrotliSpliceSlot::INJECTOR_ENV_KEY] = injector
 ```
 
+## Observing server cache hits
+
+Applications can install a per-request callback to observe an entry that is successfully served from the server cache:
+
+```ruby
+env['response_bank.on_server_cache_hit'] = ->(timestamp:, stale:) {
+  CacheMetrics.record_hit(timestamp: timestamp, stale: stale)
+}
+```
+
+`timestamp` is the entry's generation time and `stale` indicates whether it was served through stale-while-revalidate. The callback is not called for browser-cache hits, rejected entries, or cache misses. Exceptions raised by the callback are logged and do not reject the cached response.
+
 ## Exception Handling
 
 ResponseBank handles all exceptions gracefully during cache operations. If an exception occurs while reading from cache, deserializing cached data, or writing to cache, the middleware will:

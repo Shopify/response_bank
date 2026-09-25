@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+- `env['response_bank.on_server_cache_hit']`, a per-request callback with the
+  served entry's generation timestamp and stale-while-revalidate status.
+
 ## [1.6.0] - 2026-09-17
 
 ### Added

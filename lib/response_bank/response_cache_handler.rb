@@ -133,6 +133,7 @@ module ResponseBank
         @env['cacheable.compression_level'] = compression_level
 
         @env['cacheable.locked'] ||= false
+        stale = false
 
         # to preserve the unversioned/versioned logging messages from past releases we split the match_entity_tag test
         if match_entity_tag == "*"
@@ -149,6 +150,7 @@ module ResponseBank
             return
           elsif stale_while_revalidate?(timestamp, cache_age_tolerance)
             # cache is being regenerated, can we avoid piling on and use a stale version in the interim?
+            stale = true
             ResponseBank.log("Cache hit: server (recent)")
           else
             ResponseBank.log("Found an unversioned cache entry, but it was too old (#{timestamp})")
@@ -184,6 +186,7 @@ module ResponseBank
           @env.delete(ResponseBank::METADATA_ENV_KEY)
         end
 
+        notify_server_cache_hit(timestamp: timestamp, stale: stale)
         [status, @headers, [body]]
 
       end
@@ -228,6 +231,12 @@ module ResponseBank
       ResponseBank.log("Refilling cache")
 
       @cache_miss_block.call
+    end
+
+    def notify_server_cache_hit(timestamp:, stale:)
+      @env['response_bank.on_server_cache_hit']&.call(timestamp: timestamp, stale: stale)
+    rescue => handler_exception
+      ResponseBank.log("Server cache hit handler failed: #{handler_exception.class} - #{handler_exception.message}")
     end
 
     def handle_cache_exception(exception)

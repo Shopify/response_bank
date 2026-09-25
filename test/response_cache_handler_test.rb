@@ -178,6 +178,28 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert_cache_miss(false, 'server')
   end
 
+  def test_server_cache_hit_notifies_the_application
+    observed_hit = nil
+    controller.request.env['response_bank.on_server_cache_hit'] = ->(**details) { observed_hit = details }
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
+
+    expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_equal({ timestamp: 1331765506, stale: false }, observed_hit)
+  end
+
+  def test_server_cache_hit_handler_failure_does_not_reject_the_cached_response
+    controller.request.env['response_bank.on_server_cache_hit'] = ->(**) { raise 'handler failed' }
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
+    ResponseBank.stubs(:log)
+    ResponseBank.expects(:log).with(includes('Server cache hit handler failed')).once
+
+    body = expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_equal('<body>cached output</body>', Brotli.inflate(body.first))
+    assert_cache_miss(false, 'server')
+  end
+
   def test_server_cache_hit_but_empty_body
     controller.request.env['response_bank.server_cache_encoding'] = 'br'
     empty_page = [200, {"Content-Type" => "text/html", "ETag" => handler.entity_tag_hash, "Content-Encoding" => nil}, "", 1331765506]
@@ -359,12 +381,15 @@ class ResponseCacheHandlerTest < Minitest::Test
   end
 
   def test_server_recent_cache_hit
+    observed_hit = nil
+    controller.request.env['response_bank.on_server_cache_hit'] = ->(**details) { observed_hit = details }
     @controller.stubs(:cache_age_tolerance_in_seconds).returns(999999999999)
     @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(false, 'br'))
     ResponseBank.expects(:acquire_lock).with(handler.entity_tag_hash)
     expect_page_rendered(page(false), 'br')
 
     assert_cache_miss(false, 'server')
+    assert_equal({ timestamp: 1331765506, stale: true }, observed_hit)
   end
 
   def test_server_recent_cache_acceptable_but_none_found
