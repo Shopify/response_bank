@@ -2,75 +2,63 @@
 require File.dirname(__FILE__) + "/test_helper"
 
 class ResponseBankTest < Minitest::Test
-  def setup
-    @data = {
-      :foo => 'bar',
-      :bar => [1, ['a', 'b'], 2, { baz: 'buzz' }],
-      'qux' => {
-        red: ['blue', 'green'],
-        day: true,
-        night: nil,
-        updated_at: Time.at(1309362467).utc,
-        published_on: Time.at(1309320000).utc.to_date,
-      },
-      :format => Mime::Type.lookup('text/html'),
+  def serialized_cache_key(key, version: nil, schema_version: 2, encoding: 'br')
+    data = {
+      key: key,
+      key_schema_version: schema_version,
+      encoding: encoding,
     }
+    data[:version] = version unless version.nil?
+    ResponseBank.cache_key_for(data)
   end
 
-  # Returns a Hash key as serialized by inspect.
-  def k(key)
-    { key => 0 }.inspect[1..-3]
+  def test_cache_key_for_distinguishes_delimiter_placement
+    first = { a: "a,b", b: "c" }
+    second = { a: "a", b: "b,c" }
+
+    refute_equal(serialized_cache_key(first), serialized_cache_key(second))
   end
 
-  def test_cache_key_for_handles_nested_everything_and_removes_hash_keys_with_nil_values
-    expected = %|bar,1,a,b,2,{#{k(:baz)}"buzz"},{#{k(:red)}["blue", "green"], #{k(:day)}true, #{k(:night)}nil, #{k(:updated_at)}2011-06-29 15:47:47 UTC, #{k(:published_on)}Wed, 29 Jun 2011},text/html| # rubocop:disable Metrics/LineLength
-    assert_equal(expected, ResponseBank.cache_key_for(key: @data))
+  def test_cache_key_for_includes_hash_keys
+    refute_equal(
+      serialized_cache_key({ a: "value" }),
+      serialized_cache_key({ b: "value" }),
+    )
   end
 
-  def test_cache_key_with_no_key_key
-    expected = %|{#{k(:foo)}"bar", #{k(:bar)}[1, ["a", "b"], 2, {#{k(:baz)}"buzz"}], #{k("qux")}{#{k(:red)}["blue", "green"], #{k(:day)}true, #{k(:night)}nil, #{k(:updated_at)}2011-06-29 15:47:47 UTC, #{k(:published_on)}Wed, 29 Jun 2011}}| # rubocop:disable Metrics/LineLength
-    assert_equal(expected, ResponseBank.cache_key_for(@data.tap { |h| h.delete(:format) }))
+  def test_cache_key_for_includes_scalar_types
+    refute_equal(
+      serialized_cache_key({ value: 1 }),
+      serialized_cache_key({ value: "1" }),
+    )
   end
 
-  def test_cache_key_with_key_and_version
-    version = { version: 42 }
-    expected = %|bar,1,a,b,2,{#{k(:baz)}"buzz"},{#{k(:red)}["blue", "green"], #{k(:day)}true, #{k(:night)}nil, #{k(:updated_at)}2011-06-29 15:47:47 UTC, #{k(:published_on)}Wed, 29 Jun 2011},text/html:42| # rubocop:disable Metrics/LineLength
-    assert_equal(expected, ResponseBank.cache_key_for(key: @data, version: version))
+  def test_cache_key_for_includes_nested_structure
+    refute_equal(
+      serialized_cache_key({ value: ["a", "b"] }),
+      serialized_cache_key({ value: "a,b" }),
+    )
   end
 
-  def test_cache_key_with_version
-    key = "/index.html"
-    version = 42
-    assert_equal('/index.html', ResponseBank.cache_key_for({key: key}))
-    assert_equal('/index.html:42', ResponseBank.cache_key_for({key: key, version: version}))
-    assert_equal('/index.html:42', ResponseBank.cache_key_for({key: key, version: version, key_schema_version: nil}))
-    assert_equal('1:/index.html:42', ResponseBank.cache_key_for({key: key, version: version, key_schema_version: 1}))
+  def test_cache_key_for_includes_version
+    refute_equal(
+      serialized_cache_key("/index.html", version: 1),
+      serialized_cache_key("/index.html", version: 2),
+    )
   end
 
-
-  def test_cache_key_for_array
-    assert_equal('["foo", "bar", "baz"]', ResponseBank.cache_key_for(%w[foo bar baz]))
+  def test_cache_key_for_includes_schema_version
+    refute_equal(
+      serialized_cache_key("/index.html", schema_version: 1),
+      serialized_cache_key("/index.html", schema_version: 2),
+    )
   end
 
-  def test_cache_key_for_int
-    assert_equal('1234', ResponseBank.cache_key_for(1234))
-  end
-
-  def test_cache_key_for_boolean
-    assert_equal('true', ResponseBank.cache_key_for(true))
-    assert_equal('false', ResponseBank.cache_key_for(false))
-  end
-
-  def test_cache_key_for_symbol
-    assert_equal(':asdf', ResponseBank.cache_key_for(:asdf))
-  end
-
-  def test_cache_key_for_datetime
-    assert_equal(1577836800, ResponseBank.cache_key_for(DateTime.new(2020, 1, 1, 0, 0, 0, '+00:00')))
-  end
-
-  def test_cache_key_for_date
-    assert_equal("2020-01-01", ResponseBank.cache_key_for(Date.new(2020, 1, 1)))
+  def test_cache_key_for_includes_encoding
+    refute_equal(
+      serialized_cache_key("/index.html", encoding: "br"),
+      serialized_cache_key("/index.html", encoding: "gzip"),
+    )
   end
 
   def test_compress_retries_once_on_zlib_buferror

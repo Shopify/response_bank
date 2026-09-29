@@ -5,7 +5,7 @@ require 'response_bank/deferred_store'
 
 module ResponseBank
   class ResponseCacheHandler
-    CACHE_KEY_SCHEMA_VERSION = 1
+    CACHE_KEY_SCHEMA_VERSION = 2
 
     def initialize(
       key_data:,

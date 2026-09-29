@@ -110,31 +110,9 @@ module ResponseBank
     end
 
     def cache_key_for(data)
-      case data
-      when Hash
-        return data.inspect unless data.key?(:key)
-
-        key = hash_value_str(data[:key])
-
-        key = %{#{data[:key_schema_version]}:#{key}} if data[:key_schema_version]
-
-        key = %{#{key}:#{hash_value_str(data[:version])}} if data[:version]
-
-        # add the encoding to only the cache key but don't expose this detail in the entity_tag
-        key = %{#{key}:#{hash_value_str(data[:encoding])}} if data[:encoding]
-
-        key
-      when Array
-        data.inspect
-      when Time, DateTime
-        data.to_i
-      when Date
-        data.to_s # Date#to_i does not support timezones, using iso8601 instead
-      when true, false, Integer, Symbol, String
-        data.inspect
-      else
-        data.to_s.inspect
-      end
+      buffer = String.new(capacity: 256, encoding: Encoding::BINARY)
+      append_cache_key_component(buffer, data)
+      buffer
     end
 
     def check_encoding(env, default_encoding = 'br')
@@ -150,12 +128,42 @@ module ResponseBank
 
     private
 
-    def hash_value_str(data)
-      if data.is_a?(Hash)
-        data.values.join(",")
+    def append_cache_key_component(buffer, data)
+      case data
+      when Hash
+        buffer << 'h' << data.size.to_s << ':'
+        data.each do |key, value|
+          append_cache_key_component(buffer, key)
+          append_cache_key_component(buffer, value)
+        end
+      when Array
+        buffer << 'a' << data.size.to_s << ':'
+        data.each { |value| append_cache_key_component(buffer, value) }
+      when String
+        append_cache_key_scalar(buffer, 's', data)
+      when Symbol
+        append_cache_key_scalar(buffer, 'y', data.name)
+      when Integer
+        append_cache_key_scalar(buffer, 'i', data.to_s)
+      when Time, DateTime
+        append_cache_key_scalar(buffer, 't', data.to_i.to_s)
+      when Date
+        append_cache_key_scalar(buffer, 'd', data.to_s)
+      when true
+        buffer << 'b1'
+      when false
+        buffer << 'b0'
+      when nil
+        buffer << 'n'
       else
-        data.to_s
+        buffer << 'o'
+        append_cache_key_scalar(buffer, 'c', data.class.name.to_s)
+        append_cache_key_scalar(buffer, 'v', data.to_s)
       end
+    end
+
+    def append_cache_key_scalar(buffer, type, value)
+      buffer << type << value.bytesize.to_s << ':' << value
     end
   end
 end
