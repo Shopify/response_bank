@@ -178,6 +178,15 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert_cache_miss(false, 'server')
   end
 
+  def test_server_cache_hit_exposes_timestamp_and_stale_status
+    @cache_store.expects(:read).with(handler.cache_key_hash, raw: true).returns(page_cache_entry(true, 'br'))
+
+    expect_page_rendered(page(true, 'br'), 'br')
+
+    assert_equal(1331765506, controller.request.env['cacheable.timestamp'])
+    assert_equal(false, controller.request.env['cacheable.stale'])
+  end
+
   def test_server_cache_hit_but_empty_body
     controller.request.env['response_bank.server_cache_encoding'] = 'br'
     empty_page = [200, {"Content-Type" => "text/html", "ETag" => handler.entity_tag_hash, "Content-Encoding" => nil}, "", 1331765506]
@@ -347,6 +356,8 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert_equal('dynamic output', body)
     assert_cache_miss(true, 'server')
     refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
+    refute(controller.request.env.key?('cacheable.timestamp'))
+    assert_equal(false, controller.request.env['cacheable.stale'])
   end
 
   def test_server_cache_hit_serves_an_entry_stored_with_application_metadata_the_reader_cannot_load
@@ -365,6 +376,8 @@ class ResponseCacheHandlerTest < Minitest::Test
     expect_page_rendered(page(false), 'br')
 
     assert_cache_miss(false, 'server')
+    assert_equal(1331765506, controller.request.env['cacheable.timestamp'])
+    assert_equal(true, controller.request.env['cacheable.stale'])
   end
 
   def test_server_recent_cache_acceptable_but_none_found

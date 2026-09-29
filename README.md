@@ -305,6 +305,19 @@ Advanced integrations can still install the per-request injector directly in the
 env[ResponseBank::BrotliSpliceSlot::INJECTOR_ENV_KEY] = injector
 ```
 
+## Observing server cache hits
+
+After successfully serving an entry from the server cache, ResponseBank exposes its generation time and stale-while-revalidate status in the Rack environment:
+
+```ruby
+timestamp = env['cacheable.timestamp']
+stale = env['cacheable.stale']
+```
+
+`cacheable.timestamp` is only set after successfully serving a server-cache entry.
+`cacheable.stale` is initialized to `false` when a server-cache entry is evaluated
+and set to `true` only when ResponseBank serves it through stale-while-revalidate.
+
 ## Exception Handling
 
 ResponseBank handles all exceptions gracefully during cache operations. If an exception occurs while reading from cache, deserializing cached data, or writing to cache, the middleware will:
