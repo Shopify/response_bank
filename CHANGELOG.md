@@ -5,11 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [1.7.0] - 2026-09-29
 
 ### Added
 - `env['cacheable.timestamp']` and `env['cacheable.stale']` expose the served
-  server-cache entry's generation time and stale-while-revalidate status.
+  server-cache entry's generation time and stale-while-revalidate status ([#125]).
 
 ## [1.6.0] - 2026-09-17
 
@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Releases prior to 1.3.8 are recorded in the project's git tags and GitHub Releases.
 
+[1.7.0]: https://github.com/Shopify/response_bank/releases/tag/v1.7.0
 [1.6.0]: https://github.com/Shopify/response_bank/releases/tag/v1.6.0
 [1.5.0]: https://github.com/Shopify/response_bank/releases/tag/v1.5.0
 [1.4.0]: https://github.com/Shopify/response_bank/releases/tag/v1.4.0
@@ -67,3 +68,4 @@ Releases prior to 1.3.8 are recorded in the project's git tags and GitHub Releas
 [#112]: https://github.com/Shopify/response_bank/pull/112
 [#118]: https://github.com/Shopify/response_bank/pull/118
 [#119]: https://github.com/Shopify/response_bank/pull/119
+[#125]: https://github.com/Shopify/response_bank/pull/125
