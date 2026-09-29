@@ -133,7 +133,7 @@ module ResponseBank
         @env['cacheable.compression_level'] = compression_level
 
         @env['cacheable.locked'] ||= false
-        stale = false
+        @env['cacheable.stale'] = false
 
         # to preserve the unversioned/versioned logging messages from past releases we split the match_entity_tag test
         if match_entity_tag == "*"
@@ -150,7 +150,7 @@ module ResponseBank
             return
           elsif stale_while_revalidate?(timestamp, cache_age_tolerance)
             # cache is being regenerated, can we avoid piling on and use a stale version in the interim?
-            stale = true
+            @env['cacheable.stale'] = true
             ResponseBank.log("Cache hit: server (recent)")
           else
             ResponseBank.log("Found an unversioned cache entry, but it was too old (#{timestamp})")
@@ -187,7 +187,6 @@ module ResponseBank
         end
 
         @env['cacheable.timestamp'] = timestamp
-        @env['cacheable.stale'] = stale
         [status, @headers, [body]]
 
       end

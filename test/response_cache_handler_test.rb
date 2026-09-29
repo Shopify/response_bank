@@ -357,7 +357,7 @@ class ResponseCacheHandlerTest < Minitest::Test
     assert_cache_miss(true, 'server')
     refute(controller.request.env.key?(ResponseBank::METADATA_ENV_KEY))
     refute(controller.request.env.key?('cacheable.timestamp'))
-    refute(controller.request.env.key?('cacheable.stale'))
+    assert_equal(false, controller.request.env['cacheable.stale'])
   end
 
   def test_server_cache_hit_serves_an_entry_stored_with_application_metadata_the_reader_cannot_load

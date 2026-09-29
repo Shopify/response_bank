@@ -314,7 +314,9 @@ timestamp = env['cacheable.timestamp']
 stale = env['cacheable.stale']
 ```
 
-These keys are not set for browser-cache hits, rejected entries, or cache misses.
+`cacheable.timestamp` is only set after successfully serving a server-cache entry.
+`cacheable.stale` is initialized to `false` when a server-cache entry is evaluated
+and set to `true` only when ResponseBank serves it through stale-while-revalidate.
 
 ## Exception Handling
 
