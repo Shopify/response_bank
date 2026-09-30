@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and nested structure. Cache key schema version 2 invalidates entries that used
   the ambiguous values-only format.
 
+### Changed
+- Cache key construction uses bounded, precomputed type and length headers. The
+  backing key and versioned ETag now share one serialization of the key data.
+
 ## [1.7.0] - 2026-09-29
 
 ### Added

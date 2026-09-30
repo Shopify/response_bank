@@ -2,6 +2,7 @@
 
 # Run with a supported appraisal bundle:
 # BUNDLE_GEMFILE=gemfiles/actionpack_8.0.gemfile bundle exec ruby -Ilib benchmark/cache_key_serialization.rb
+# Add --yjit before -Ilib to measure the production execution mode.
 
 require "benchmark"
 require "date"
@@ -44,17 +45,115 @@ def legacy_hash_value_str(data)
 end
 
 
+def previous_cache_key_for(data)
+  buffer = String.new(capacity: 256, encoding: Encoding::BINARY)
+  previous_append_cache_key_component(buffer, data)
+  buffer
+end
+
+
+def previous_append_cache_key_component(buffer, data)
+  case data
+  when Hash
+    buffer << 'h' << data.size.to_s << ':'
+    data.each do |key, value|
+      previous_append_cache_key_component(buffer, key)
+      previous_append_cache_key_component(buffer, value)
+    end
+  when Array
+    buffer << 'a' << data.size.to_s << ':'
+    data.each { |value| previous_append_cache_key_component(buffer, value) }
+  when String
+    previous_append_cache_key_scalar(buffer, 's', data)
+  when Symbol
+    previous_append_cache_key_scalar(buffer, 'y', data.name)
+  when Integer
+    previous_append_cache_key_scalar(buffer, 'i', data.to_s)
+  when Time, DateTime
+    previous_append_cache_key_scalar(buffer, 't', data.to_i.to_s)
+  when Date
+    previous_append_cache_key_scalar(buffer, 'd', data.to_s)
+  when true
+    buffer << 'b1'
+  when false
+    buffer << 'b0'
+  when nil
+    buffer << 'n'
+  else
+    buffer << 'o'
+    previous_append_cache_key_scalar(buffer, 'c', data.class.name.to_s)
+    previous_append_cache_key_scalar(buffer, 'v', data.to_s)
+  end
+end
+
+
+def previous_append_cache_key_scalar(buffer, type, value)
+  buffer << type << value.bytesize.to_s << ':' << value
+end
+
+
 def median(values)
   sorted = values.sort
   sorted.fetch(sorted.length / 2)
 end
 
 
+def legacy_cache_key_pair(input)
+  base = legacy_cache_key_for(
+    key: input[:key],
+    key_schema_version: input[:key_schema_version],
+    encoding: input[:encoding],
+  )
+  [base, legacy_cache_key_for(input)]
+end
+
+
+def previous_cache_key_pair(input)
+  base = previous_cache_key_for(
+    key: input[:key],
+    key_schema_version: input[:key_schema_version],
+    encoding: input[:encoding],
+  )
+  [base, previous_cache_key_for(input)]
+end
+
+
+def separate_cache_key_pair(input)
+  base = ResponseBank.cache_key_for(
+    key: input[:key],
+    key_schema_version: input[:key_schema_version],
+    encoding: input[:encoding],
+  )
+  [base, ResponseBank.cache_key_for(input)]
+end
+
+
+def optimized_cache_key_pair(input)
+  ResponseBank.cache_key_pair_for(
+    key: input[:key],
+    version: input[:version],
+    key_schema_version: input[:key_schema_version],
+    encoding: input[:encoding],
+  )
+end
+
+
+def digest_pair(pair)
+  pair.map { |key| Digest::MD5.hexdigest(key) }
+end
+
+
 def measure(name, input, iterations)
   implementations = {
-    legacy: method(:legacy_cache_key_for),
-    current: ResponseBank.method(:cache_key_for),
+    legacy: method(:legacy_cache_key_pair),
+    separate: method(:separate_cache_key_pair),
+    previous: method(:previous_cache_key_pair),
+    optimized: method(:optimized_cache_key_pair),
   }
+
+  expected = previous_cache_key_pair(input)
+  raise "separate serializer bytes differ" unless separate_cache_key_pair(input) == expected
+  raise "optimized serializer bytes differ" unless optimized_cache_key_pair(input) == expected
 
   results = implementations.to_h do |implementation, serializer|
     WARMUP_ITERATIONS.times { serializer.call(input) }
@@ -67,7 +166,7 @@ def measure(name, input, iterations)
     digest_samples = Array.new(SAMPLE_COUNT) do
       GC.start
       Benchmark.realtime do
-        iterations.times { Digest::MD5.hexdigest(serializer.call(input)) }
+        iterations.times { digest_pair(serializer.call(input)) }
       end
     end
 
@@ -81,37 +180,43 @@ def measure(name, input, iterations)
       serialization_ns: median(serialization_samples) * 1_000_000_000 / iterations,
       digest_ns: median(digest_samples) * 1_000_000_000 / iterations,
       allocations: (allocated_after - allocated_before).fdiv(iterations),
-      bytes: output.bytesize,
+      bytes: output.sum(&:bytesize),
     }
 
     [implementation, result]
   end
 
-  legacy = results.fetch(:legacy)
-  current = results.fetch(:current)
+  separate = results.fetch(:separate)
+  previous = results.fetch(:previous)
+  optimized = results.fetch(:optimized)
   {
     name: name,
     iterations: iterations,
-    legacy: legacy,
-    current: current,
-    ratios: {
-      serialization_time: current[:serialization_ns] / legacy[:serialization_ns],
-      digest_time: current[:digest_ns] / legacy[:digest_ns],
-      allocations: current[:allocations] / legacy[:allocations],
-      bytes: current[:bytes].fdiv(legacy[:bytes]),
+    **results,
+    optimized_to_previous: {
+      serialization_time: optimized[:serialization_ns] / previous[:serialization_ns],
+      digest_time: optimized[:digest_ns] / previous[:digest_ns],
+      allocations: optimized[:allocations] / previous[:allocations],
+      bytes: optimized[:bytes].fdiv(previous[:bytes]),
+    },
+    optimized_to_separate: {
+      serialization_time: optimized[:serialization_ns] / separate[:serialization_ns],
+      digest_time: optimized[:digest_ns] / separate[:digest_ns],
+      allocations: optimized[:allocations] / separate[:allocations],
+      bytes: optimized[:bytes].fdiv(separate[:bytes]),
     },
   }
 end
 
 
-small = {
+SMALL_KEY_INPUT = {
   key: { first: "a,b", second: "c" },
   version: { version: 42 },
   key_schema_version: 2,
   encoding: "br",
 }
 
-storefront_key = {
+STOREFRONT_KEY_DATA = {
   version: "3",
   shop_id: 123_456_789,
   ssl: true,
@@ -142,14 +247,16 @@ storefront_key = {
   experiments: "checkout_redesign=control",
 }
 
-storefront = {
-  key: storefront_key,
+STOREFRONT_KEY_INPUT = {
+  key: STOREFRONT_KEY_DATA,
   version: { "version" => "2", "shop.version" => 9_876_543 },
   key_schema_version: 2,
   encoding: "br",
 }
 
-puts JSON.pretty_generate([
-  measure("small", small, SMALL_ITERATIONS),
-  measure("representative_storefront", storefront, STOREFRONT_ITERATIONS),
-])
+if $PROGRAM_NAME == __FILE__
+  puts JSON.pretty_generate([
+    measure("small", SMALL_KEY_INPUT, SMALL_ITERATIONS),
+    measure("representative_storefront", STOREFRONT_KEY_INPUT, STOREFRONT_ITERATIONS),
+  ])
+end

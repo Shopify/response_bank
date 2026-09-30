@@ -63,11 +63,20 @@ module ResponseBank
     end
 
     def entity_tag
-      @entity_tag ||= ResponseBank.cache_key_for(key: @key_data, version: @version_data, key_schema_version: @key_schema_version, encoding: @env['response_bank.server_cache_encoding'])
+      cache_key_pair.last
     end
 
     def cache_key
-      @cache_key ||= ResponseBank.cache_key_for(key: @key_data, key_schema_version: @key_schema_version, encoding: @env['response_bank.server_cache_encoding'])
+      cache_key_pair.first
+    end
+
+    def cache_key_pair
+      @cache_key_pair ||= ResponseBank.cache_key_pair_for(
+        key: @key_data,
+        version: @version_data,
+        key_schema_version: @key_schema_version,
+        encoding: @env['response_bank.server_cache_encoding'],
+      )
     end
 
     def cacheable_info_dump

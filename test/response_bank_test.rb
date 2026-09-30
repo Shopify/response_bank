@@ -3,12 +3,10 @@ require File.dirname(__FILE__) + "/test_helper"
 
 class ResponseBankTest < Minitest::Test
   def serialized_cache_key(key, version: nil, schema_version: 2, encoding: 'br')
-    data = {
-      key: key,
-      key_schema_version: schema_version,
-      encoding: encoding,
-    }
+    data = { key: key }
     data[:version] = version unless version.nil?
+    data[:key_schema_version] = schema_version
+    data[:encoding] = encoding
     ResponseBank.cache_key_for(data)
   end
 
@@ -59,6 +57,27 @@ class ResponseBankTest < Minitest::Test
       serialized_cache_key("/index.html", encoding: "br"),
       serialized_cache_key("/index.html", encoding: "gzip"),
     )
+  end
+
+  def test_cache_key_pair_matches_separate_envelopes_and_isolates_version
+    key = { first: "a,b", nested: [1, :one, "x" * 300] }
+    first = ResponseBank.cache_key_pair_for(
+      key: key,
+      version: { theme: 1 },
+      key_schema_version: 2,
+      encoding: "br",
+    )
+    second = ResponseBank.cache_key_pair_for(
+      key: key,
+      version: { theme: 2 },
+      key_schema_version: 2,
+      encoding: "br",
+    )
+
+    assert_equal(serialized_cache_key(key), first.first)
+    assert_equal(serialized_cache_key(key, version: { theme: 1 }), first.last)
+    assert_equal(first.first, second.first)
+    refute_equal(first.last, second.last)
   end
 
   def test_compress_retries_once_on_zlib_buferror

@@ -12,7 +12,15 @@ require 'brotli'
 require 'benchmark'
 
 module ResponseBank
+  CACHE_KEY_STRING_HEADERS = Array.new(256) { |length| "s#{length}:".freeze }.freeze
+  CACHE_KEY_SYMBOL_HEADERS = Array.new(256) { |length| "y#{length}:".freeze }.freeze
+  CACHE_KEY_HASH_HEADERS = Array.new(256) { |length| "h#{length}:".freeze }.freeze
+  CACHE_KEY_ARRAY_HEADERS = Array.new(256) { |length| "a#{length}:".freeze }.freeze
+  CACHE_KEY_INTEGER_HEADERS = Array.new(256) { |length| "i#{length}:".freeze }.freeze
+
   private_constant :CacheWriter
+  private_constant :CACHE_KEY_STRING_HEADERS, :CACHE_KEY_SYMBOL_HEADERS
+  private_constant :CACHE_KEY_HASH_HEADERS, :CACHE_KEY_ARRAY_HEADERS, :CACHE_KEY_INTEGER_HEADERS
 
   class << self
     attr_accessor :cache_store
@@ -110,9 +118,30 @@ module ResponseBank
     end
 
     def cache_key_for(data)
-      buffer = String.new(capacity: 256, encoding: Encoding::BINARY)
-      append_cache_key_component(buffer, data)
-      buffer
+      append_cache_key_component(
+        String.new(capacity: 1024, encoding: Encoding::BINARY),
+        data,
+      )
+    end
+
+    def cache_key_pair_for(key:, version:, key_schema_version:, encoding:)
+      encoded_key = cache_key_for(key)
+
+      cache_key = String.new(capacity: 1024, encoding: Encoding::BINARY)
+      cache_key << 'h3:y3:key' << encoded_key << 'y18:key_schema_version'
+      append_cache_key_component(cache_key, key_schema_version)
+      cache_key << 'y8:encoding'
+      append_cache_key_component(cache_key, encoding)
+
+      versioned_key = String.new(capacity: 1024, encoding: Encoding::BINARY)
+      versioned_key << 'h4:y3:key' << encoded_key << 'y7:version'
+      append_cache_key_component(versioned_key, version)
+      versioned_key << 'y18:key_schema_version'
+      append_cache_key_component(versioned_key, key_schema_version)
+      versioned_key << 'y8:encoding'
+      append_cache_key_component(versioned_key, encoding)
+
+      [cache_key, versioned_key]
     end
 
     def check_encoding(env, default_encoding = 'br')
@@ -131,20 +160,27 @@ module ResponseBank
     def append_cache_key_component(buffer, data)
       case data
       when Hash
-        buffer << 'h' << data.size.to_s << ':'
+        length = data.size
+        buffer << (CACHE_KEY_HASH_HEADERS[length] || "h#{length}:")
         data.each do |key, value|
           append_cache_key_component(buffer, key)
           append_cache_key_component(buffer, value)
         end
       when Array
-        buffer << 'a' << data.size.to_s << ':'
+        length = data.size
+        buffer << (CACHE_KEY_ARRAY_HEADERS[length] || "a#{length}:")
         data.each { |value| append_cache_key_component(buffer, value) }
       when String
-        append_cache_key_scalar(buffer, 's', data)
+        length = data.bytesize
+        buffer << (CACHE_KEY_STRING_HEADERS[length] || "s#{length}:") << data
       when Symbol
-        append_cache_key_scalar(buffer, 'y', data.name)
+        value = data.name
+        length = value.bytesize
+        buffer << (CACHE_KEY_SYMBOL_HEADERS[length] || "y#{length}:") << value
       when Integer
-        append_cache_key_scalar(buffer, 'i', data.to_s)
+        value = data.to_s
+        length = value.bytesize
+        buffer << (CACHE_KEY_INTEGER_HEADERS[length] || "i#{length}:") << value
       when Time, DateTime
         append_cache_key_scalar(buffer, 't', data.to_i.to_s)
       when Date
@@ -160,6 +196,7 @@ module ResponseBank
         append_cache_key_scalar(buffer, 'c', data.class.name.to_s)
         append_cache_key_scalar(buffer, 'v', data.to_s)
       end
+      buffer
     end
 
     def append_cache_key_scalar(buffer, type, value)
