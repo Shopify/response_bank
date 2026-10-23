@@ -100,6 +100,27 @@ class ResponseBankCacheWriterTest < Minitest::Test
     assert_equal('Hi!', stored.body)
   end
 
+  def test_store_caches_the_prepared_body_when_its_slots_cannot_be_encoded
+    injector = InlineValueInjector.new('a' => 'next-a', 'b' => 'next-b')
+    injector.slots = []
+    @env[ResponseBank::BrotliSpliceSlot::INJECTOR_ENV_KEY] = injector
+    ResponseBank.stubs(:log)
+
+    stored = cache_writer.store(
+      @env,
+      status: 200,
+      headers: { 'Content-Type' => 'text/html' },
+      body: InlineValueInjector::RENDERED,
+      timestamp: 424242,
+      content_encoding: 'br',
+    )
+
+    assert_equal(InlineValueInjector::PREPARED, stored.body)
+    payload = MessagePack.load(ResponseBank.cache_store.read('store_cache_key', raw: true))
+    assert_equal(5, payload.length)
+    assert_equal(InlineValueInjector::PREPARED.b, Brotli.inflate(payload[2]))
+  end
+
   def test_store_spliced_accepts_a_cache_safe_brotli_body
     compressed_body = ResponseBank.compress('already compressed', 'br')
     slot = {

@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+- `prepare_response_bank_brotli_splice` may return several slots. Each gets its
+  own metadata entry, and a Brotli cache hit fills them all with one copy of the
+  body; a slot whose replacement does not fit keeps its placeholder. The cache
+  format and `BrotliSpliceSlot::METADATA_VERSION` are unchanged, so existing
+  entries still read correctly.
+
+### Changed
+- Brotli splicing requires `brotli_splice` 0.3.0 or newer.
+- `BrotliSpliceSlot.metadata_for` takes an Array of slot descriptors.
+
+### Fixed
+- When an injector prepares a body whose slots cannot be encoded, the prepared
+  body is cached without slots instead of the response as rendered, so
+  per-request values no longer reach the shared cache.
+
 ## [1.8.0] - 2026-10-26
 
 ### Changed

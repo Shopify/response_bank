@@ -54,7 +54,7 @@ module ResponseBank
         before_write: nil
       )
         validate_spliced_body!(env, body)
-        metadata = slot && BrotliSpliceSlot.metadata_for(**slot)
+        metadata = slot && BrotliSpliceSlot.metadata_for([slot])
         env['cacheable.compression_level'] = compression_level
         persist(
           env,
@@ -124,13 +124,12 @@ module ResponseBank
             body = encoded_body.body
             body_compressed = encoded_body.compressed_body
             metadata = encoded_body.metadata
-          else
-            body_compressed = ResponseBank.compress(
-              body,
-              content_encoding,
-              compression_level: compression_level,
-            )
           end
+          body_compressed ||= ResponseBank.compress(
+            body,
+            content_encoding,
+            compression_level: compression_level,
+          )
         end
         ResponseBank.log("Compression time: #{time}ms")
         env['cacheable.compression_time'] = time
