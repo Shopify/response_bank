@@ -1,3 +1,10 @@
+GIT
+  remote: https://github.com/lucasuyezu/brotli_splice.git
+  revision: 5ce3e980b872b686b8921bb0a148353cb69545b0
+  branch: lucasuyezu/multiple-slots
+  specs:
+    brotli_splice (0.3.0)
+
 PATH
   remote: .
   specs:
@@ -59,7 +66,6 @@ GEM
     benchmark (0.4.1)
     bigdecimal (3.2.2)
     brotli (0.7.0)
-    brotli_splice (0.3.0)
     builder (3.3.0)
     concurrent-ruby (1.3.5)
     connection_pool (2.5.3)
@@ -165,7 +171,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  brotli_splice (= 0.3.0)
+  brotli_splice (= 0.3.0)!
   minitest
   mocha
   rails
