@@ -80,6 +80,19 @@ class ResponseBankTest < Minitest::Test
     refute_equal(key, ResponseBank.cache_key_for(key: { a: "\xFE".b, b: "caf\u00e9" }, version: 1, encoding: 'br'))
   end
 
+  def test_cache_key_for_hash_key_with_invalid_utf8_value_and_utf8_version
+    key = ResponseBank.cache_key_for(key: { a: "\xFF".b }, version: { v: "caf\u00e9" }, key_schema_version: 1)
+
+    assert_equal("1:h1:1:a1:\xFF:h1:1:v5:caf\xC3\xA9".b, key.b)
+  end
+
+  def test_cache_key_for_keeps_utf8_string_keys
+    key = ResponseBank.cache_key_for(key: "/caf\u00e9", version: "caf\u00e9")
+
+    assert_equal("/caf\u00e9:caf\u00e9", key)
+    assert_equal(Encoding::UTF_8, key.encoding)
+  end
+
   def test_cache_key_for_hash_key_with_nested_values
     key = { path: '/', params: { ids: [1, 2], q: { term: 'a,b' } } }
 

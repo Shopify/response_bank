@@ -114,16 +114,20 @@ module ResponseBank
       when Hash
         return data.inspect unless data.key?(:key)
 
-        key = hash_value_str(data[:key])
+        # Components are joined as bytes, so values in different encodings can't raise.
+        key = String.new(encoding: Encoding::BINARY)
 
-        key = %{#{data[:key_schema_version]}:#{key}} if data[:key_schema_version]
+        key << hash_value_str(data[:key_schema_version]) << ":" if data[:key_schema_version]
 
-        key = %{#{key}:#{hash_value_str(data[:version])}} if data[:version]
+        key << hash_value_str(data[:key])
+
+        key << ":" << hash_value_str(data[:version]) if data[:version]
 
         # add the encoding to only the cache key but don't expose this detail in the entity_tag
-        key = %{#{key}:#{hash_value_str(data[:encoding])}} if data[:encoding]
+        key << ":" << hash_value_str(data[:encoding]) if data[:encoding]
 
-        key
+        key.force_encoding(Encoding::UTF_8)
+        key.valid_encoding? ? key : key.force_encoding(Encoding::BINARY)
       when Array
         data.inspect
       when Time, DateTime
@@ -152,11 +156,9 @@ module ResponseBank
 
     def hash_value_str(data)
       if data.is_a?(Hash)
-        key = append_key_component(String.new(encoding: Encoding::BINARY), data)
-        key.force_encoding(Encoding::UTF_8)
-        key.valid_encoding? ? key : key.force_encoding(Encoding::BINARY)
+        append_key_component(String.new(encoding: Encoding::BINARY), data)
       else
-        data.to_s
+        data.to_s.b
       end
     end
 
