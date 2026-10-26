@@ -152,10 +152,34 @@ module ResponseBank
 
     def hash_value_str(data)
       if data.is_a?(Hash)
-        data.values.join(",")
+        key = append_key_component(String.new(encoding: Encoding::BINARY), data)
+        key.force_encoding(Encoding::UTF_8)
+        key.valid_encoding? ? key : key.force_encoding(Encoding::BINARY)
       else
         data.to_s
       end
+    end
+
+    # Hashes and Arrays are written as a type tag and element count, followed
+    # by their elements; Hash entries are written as name then value, in
+    # insertion order. Every other value is written as the byte length of its
+    # #to_s followed by those bytes, so no value can be read as part of another.
+    def append_key_component(buffer, data)
+      case data
+      when Hash
+        buffer << "h" << data.size.to_s << ":"
+        data.each do |name, value|
+          append_key_component(buffer, name)
+          append_key_component(buffer, value)
+        end
+      when Array
+        buffer << "a" << data.size.to_s << ":"
+        data.each { |value| append_key_component(buffer, value) }
+      else
+        value = data.to_s.b
+        buffer << value.bytesize.to_s << ":" << value
+      end
+      buffer
     end
   end
 end

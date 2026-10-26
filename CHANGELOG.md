@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Hash cache keys include field names. Each field name and value is written
+  with a length prefix, and nested Hashes and Arrays with their element count,
+  so hashes with different fields, or values containing `,`, no longer produce
+  the same key. String and other non-Hash keys are unchanged. Entries cached
+  under a Hash key get a new key, so they miss once after upgrading.
+
 ## [1.7.0] - 2026-09-29
 
 ### Added

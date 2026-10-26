@@ -23,7 +23,7 @@ class ResponseBankTest < Minitest::Test
   end
 
   def test_cache_key_for_handles_nested_everything_and_removes_hash_keys_with_nil_values
-    expected = %|bar,1,a,b,2,{#{k(:baz)}"buzz"},{#{k(:red)}["blue", "green"], #{k(:day)}true, #{k(:night)}nil, #{k(:updated_at)}2011-06-29 15:47:47 UTC, #{k(:published_on)}Wed, 29 Jun 2011},text/html| # rubocop:disable Metrics/LineLength
+    expected = %|h4:3:foo3:bar3:bara4:1:1a2:1:a1:b1:2h1:3:baz4:buzz3:quxh5:3:reda2:4:blue5:green3:day4:true5:night0:10:updated_at23:2011-06-29 15:47:47 UTC12:published_on10:2011-06-296:format9:text/html| # rubocop:disable Metrics/LineLength
     assert_equal(expected, ResponseBank.cache_key_for(key: @data))
   end
 
@@ -34,7 +34,7 @@ class ResponseBankTest < Minitest::Test
 
   def test_cache_key_with_key_and_version
     version = { version: 42 }
-    expected = %|bar,1,a,b,2,{#{k(:baz)}"buzz"},{#{k(:red)}["blue", "green"], #{k(:day)}true, #{k(:night)}nil, #{k(:updated_at)}2011-06-29 15:47:47 UTC, #{k(:published_on)}Wed, 29 Jun 2011},text/html:42| # rubocop:disable Metrics/LineLength
+    expected = %|h4:3:foo3:bar3:bara4:1:1a2:1:a1:b1:2h1:3:baz4:buzz3:quxh5:3:reda2:4:blue5:green3:day4:true5:night0:10:updated_at23:2011-06-29 15:47:47 UTC12:published_on10:2011-06-296:format9:text/html:h1:7:version2:42| # rubocop:disable Metrics/LineLength
     assert_equal(expected, ResponseBank.cache_key_for(key: @data, version: version))
   end
 
@@ -47,6 +47,45 @@ class ResponseBankTest < Minitest::Test
     assert_equal('1:/index.html:42', ResponseBank.cache_key_for({key: key, version: version, key_schema_version: 1}))
   end
 
+  def test_cache_key_for_hash_key_includes_field_names
+    assert_equal('h1:1:a1:x', ResponseBank.cache_key_for(key: { a: 'x' }))
+    refute_equal(ResponseBank.cache_key_for(key: { a: 'x' }), ResponseBank.cache_key_for(key: { b: 'x' }))
+  end
+
+  def test_cache_key_for_hash_key_distinguishes_layouts_with_the_same_joined_values
+    keys = [
+      { a: 'x,y' },
+      { a: 'x', b: 'y' },
+      { b: 'x', a: 'y' },
+      { a: 'x', b: nil, c: 'y' },
+      { a: ['x', 'y'] },
+      { a: { x: 'y' } },
+      { a: '1:x' },
+    ].map { |key| ResponseBank.cache_key_for(key: key) }
+
+    assert_equal(keys.size, keys.uniq.size, keys.inspect)
+  end
+
+  def test_cache_key_for_hash_key_preserves_insertion_order
+    refute_equal(
+      ResponseBank.cache_key_for(key: { a: 'x', b: 'y' }),
+      ResponseBank.cache_key_for(key: { b: 'y', a: 'x' })
+    )
+  end
+
+  def test_cache_key_for_hash_key_with_invalid_utf8_value
+    key = ResponseBank.cache_key_for(key: { a: "\xFF".b, b: "caf\u00e9" }, version: 1, encoding: 'br')
+
+    assert_equal("h2:1:a1:\xFF1:b5:caf\xC3\xA9:1:br".b, key.b)
+    refute_equal(key, ResponseBank.cache_key_for(key: { a: "\xFE".b, b: "caf\u00e9" }, version: 1, encoding: 'br'))
+  end
+
+  def test_cache_key_for_hash_key_with_nested_values
+    key = { path: '/', params: { ids: [1, 2], q: { term: 'a,b' } } }
+
+    assert_equal('h2:4:path1:/6:paramsh2:3:idsa2:1:11:21:qh1:4:term3:a,b', ResponseBank.cache_key_for(key: key))
+    assert_equal(ResponseBank.cache_key_for(key: key), ResponseBank.cache_key_for(key: key))
+  end
 
   def test_cache_key_for_array
     assert_equal('["foo", "bar", "baz"]', ResponseBank.cache_key_for(%w[foo bar baz]))
