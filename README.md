@@ -296,10 +296,11 @@ silently breaks once any multi-byte UTF-8 precedes the placeholder: a character
 offset is always ≤ the byte length, so the bounds check still passes.
 If any slot cannot be encoded (out of bounds, out of order, overlapping, or no
 longer than the 2 reserved bytes), ResponseBank logs it and caches the returned
-HTML without slots, so the response is never cached as rendered. A Hash without
-`:body` raises `ArgumentError`, and nothing is cached (see
-[Exception Handling](#exception-handling)). Return `nil` to cache the body as
-rendered.
+HTML without slots, so the response is never cached as rendered. On that
+request, a client that accepts Brotli is served the returned HTML too,
+placeholders included. A Hash without `:body` raises `ArgumentError`, and
+nothing is cached (see [Exception Handling](#exception-handling)). Return `nil`
+to cache the body as rendered.
 
 `response_bank_brotli_splice_replacement` is used on Brotli cache hits, once per
 slot. It must return exactly `slot["replacement_length"]` bytes. Note that

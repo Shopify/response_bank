@@ -15,7 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entries still read correctly ([#127]).
 
 ### Changed
-- Brotli splicing requires `brotli_splice` 0.3.0 or newer ([#127]).
+- Brotli splicing requires `brotli_splice` 0.3.0 or newer. Apps that use splice
+  slots must upgrade it in the same deploy: with an older version installed,
+  spliced misses and Brotli hits on spliced entries raise `Gem::LoadError`,
+  which ResponseBank does not rescue ([#127]).
 - `BrotliSpliceSlot.metadata_for` takes an Array of slot descriptors ([#127]).
 
 ### Fixed
