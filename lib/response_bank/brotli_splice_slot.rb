@@ -14,9 +14,10 @@ module ResponseBank
 
     class << self
       # Returns nil when the injector does not prepare the body. Once it does, the
-      # prepared body is the shared copy: if its slots cannot be encoded, the result
-      # carries that body without a compressed body or metadata, so the caller
-      # compresses it normally and never caches the response as rendered.
+      # prepared body is the shared copy, so the response is never cached as rendered:
+      # without a prepared body this raises, and nothing is cached; if its slots cannot
+      # be encoded, the result carries that body without a compressed body or metadata,
+      # so the caller compresses it normally.
       def encode_body(env, body, headers, compression_level:)
         injector = env[INJECTOR_ENV_KEY]
         return unless injector
@@ -26,7 +27,7 @@ module ResponseBank
         return unless prepared
 
         prepared_body = hash_fetch(prepared, :body)
-        return unless prepared_body
+        raise ArgumentError, 'prepare_response_bank_brotli_splice returned no :body' unless prepared_body
 
         slots = html_slots(prepared_body, hash_fetch(prepared, :slots))
         unless slots

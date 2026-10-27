@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When an injector prepares a body whose slots cannot be encoded, the prepared
   body is cached without slots instead of the response as rendered, so
   per-request values no longer reach the shared cache ([#127]).
+- When an injector returns a Hash without `:body`, ResponseBank raises
+  `ArgumentError` and caches nothing, instead of caching the response as
+  rendered ([#127]).
 
 ## [1.8.0] - 2026-10-26
 
