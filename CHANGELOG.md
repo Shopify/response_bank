@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-10-26
+
+### Changed
+- Hash cache keys include field names. Each field name and value is written
+  with a length prefix, and nested Hashes and Arrays with their element count,
+  so hashes with different fields, or values containing `,`, no longer produce
+  the same key. String and other non-Hash keys are unchanged. Entries cached
+  under a Hash key get a new key, so they miss once after upgrading ([#128]).
+
 ## [1.7.0] - 2026-09-29
 
 ### Added
@@ -58,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Releases prior to 1.3.8 are recorded in the project's git tags and GitHub Releases.
 
+[1.8.0]: https://github.com/Shopify/response_bank/releases/tag/v1.8.0
 [1.7.0]: https://github.com/Shopify/response_bank/releases/tag/v1.7.0
 [1.6.0]: https://github.com/Shopify/response_bank/releases/tag/v1.6.0
 [1.5.0]: https://github.com/Shopify/response_bank/releases/tag/v1.5.0
@@ -69,3 +79,4 @@ Releases prior to 1.3.8 are recorded in the project's git tags and GitHub Releas
 [#118]: https://github.com/Shopify/response_bank/pull/118
 [#119]: https://github.com/Shopify/response_bank/pull/119
 [#125]: https://github.com/Shopify/response_bank/pull/125
+[#128]: https://github.com/Shopify/response_bank/pull/128

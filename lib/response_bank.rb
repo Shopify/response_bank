@@ -114,16 +114,20 @@ module ResponseBank
       when Hash
         return data.inspect unless data.key?(:key)
 
-        key = hash_value_str(data[:key])
+        # Components are joined as bytes, so values in different encodings can't raise.
+        key = String.new(encoding: Encoding::BINARY)
 
-        key = %{#{data[:key_schema_version]}:#{key}} if data[:key_schema_version]
+        key << hash_value_str(data[:key_schema_version]) << ":" if data[:key_schema_version]
 
-        key = %{#{key}:#{hash_value_str(data[:version])}} if data[:version]
+        key << hash_value_str(data[:key])
+
+        key << ":" << hash_value_str(data[:version]) if data[:version]
 
         # add the encoding to only the cache key but don't expose this detail in the entity_tag
-        key = %{#{key}:#{hash_value_str(data[:encoding])}} if data[:encoding]
+        key << ":" << hash_value_str(data[:encoding]) if data[:encoding]
 
-        key
+        key.force_encoding(Encoding::UTF_8)
+        key.valid_encoding? ? key : key.force_encoding(Encoding::BINARY)
       when Array
         data.inspect
       when Time, DateTime
@@ -152,10 +156,32 @@ module ResponseBank
 
     def hash_value_str(data)
       if data.is_a?(Hash)
-        data.values.join(",")
+        append_key_component(String.new(encoding: Encoding::BINARY), data)
       else
-        data.to_s
+        data.to_s.b
       end
+    end
+
+    # Hashes and Arrays are written as a type tag and element count, followed
+    # by their elements; Hash entries are written as name then value, in
+    # insertion order. Every other value is written as the byte length of its
+    # #to_s followed by those bytes, so no value can be read as part of another.
+    def append_key_component(buffer, data)
+      case data
+      when Hash
+        buffer << "h" << data.size.to_s << ":"
+        data.each do |name, value|
+          append_key_component(buffer, name)
+          append_key_component(buffer, value)
+        end
+      when Array
+        buffer << "a" << data.size.to_s << ":"
+        data.each { |value| append_key_component(buffer, value) }
+      else
+        value = data.to_s.b
+        buffer << value.bytesize.to_s << ":" << value
+      end
+      buffer
     end
   end
 end
