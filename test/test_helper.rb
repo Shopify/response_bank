@@ -66,6 +66,35 @@ class HtmlMetadataInjector
   end
 end
 
+# Renders each per-request value inline, then swaps it for a placeholder of the same
+# width when the page is prepared for the shared cache, with one slot per value.
+class InlineValueInjector
+  include ResponseBank::BrotliSpliceInjector
+
+  RENDERED = %(<html><head><meta name="a" content="live-a\r\n"><title>Café</title>) +
+    %(<meta name="b" content="live-b\r\n"></head><body>Hi</body></html>)
+  PREPARED = RENDERED.gsub('live-', 'none-')
+
+  attr_writer :slots
+
+  def initialize(replacements)
+    @replacements = replacements
+  end
+
+  def prepare_response_bank_brotli_splice(body, _headers)
+    prepared = body.gsub('live-', 'none-')
+    slots = @slots || ['a', 'b'].map do |name|
+      { name: name, offset: prepared.b.index("none-#{name}"), length: "none-#{name}\r\n".bytesize }
+    end
+
+    { body: prepared, slots: slots }
+  end
+
+  def response_bank_brotli_splice_replacement(slot)
+    @replacements[slot.fetch('name')]
+  end
+end
+
 class MockController < ActionController::Base
   def self.after_filter(*args); end
 

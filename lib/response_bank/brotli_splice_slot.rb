@@ -7,12 +7,17 @@ module ResponseBank
     METADATA_VERSION = 1
     # BrotliSplice reserves the last 2 bytes of every slot as a fixed "\r\n" context
     # suffix, so a slot must be longer than that to hold any replaceable content --
-    # BrotliSplice.encode raises unless the slot length exceeds it.
+    # BrotliSplice.encode_slots raises unless every slot length exceeds it.
     CONTEXT_SUFFIX_LENGTH = 2
 
     EncodedBody = Struct.new(:body, :compressed_body, :metadata, keyword_init: true)
 
     class << self
+      # Returns nil when the injector does not prepare the body. Once it does, the
+      # prepared body is the shared copy, so the response is never cached as rendered:
+      # without a prepared body this raises, and nothing is cached; if its slots cannot
+      # be encoded, the result carries that body without a compressed body or metadata,
+      # so the caller compresses it normally.
       def encode_body(env, body, headers, compression_level:)
         injector = env[INJECTOR_ENV_KEY]
         return unless injector
@@ -22,14 +27,13 @@ module ResponseBank
         return unless prepared
 
         prepared_body = hash_fetch(prepared, :body)
-        slots = hash_fetch(prepared, :slots)
-        return unless prepared_body && slots && slots.length == 1
+        raise ArgumentError, 'prepare_response_bank_brotli_splice returned no :body' unless prepared_body
 
-        slot = slots.first
-        slot_name = hash_fetch(slot, :name).to_s
-        html_offset = integer_value(hash_fetch(slot, :offset))
-        html_length = integer_value(hash_fetch(slot, :length))
-        return unless valid_html_slot?(prepared_body, html_offset, html_length)
+        slots = html_slots(prepared_body, hash_fetch(prepared, :slots))
+        unless slots
+          ResponseBank.log('BrotliSplice encode skipped: invalid slot')
+          return EncodedBody.new(body: prepared_body)
+        end
 
         # Load the native gem only once we have real splice work to do. Keeping this
         # outside the begin/rescue below is deliberate: the rescue clause references
@@ -38,45 +42,38 @@ module ResponseBank
         ensure_brotli_splice_loaded!
 
         begin
-          result = BrotliSplice.encode(prepared_body, html_offset, html_length, quality: compression_level)
+          result = BrotliSplice.encode_slots(
+            prepared_body,
+            slots.map { |slot| [slot[:offset], slot[:length]] },
+            quality: compression_level,
+          )
+          compressed_slots = slots.zip(result[:slots]).map do |slot, compressed_slot|
+            {
+              name: slot[:name],
+              compressed_offset: compressed_slot[:offset],
+              replacement_length: compressed_slot[:length],
+              html_placeholder_offset: slot[:offset],
+              html_placeholder_length: slot[:length],
+              context_suffix: result[:context_suffix],
+            }
+          end
 
           EncodedBody.new(
             body: prepared_body,
             compressed_body: result[:data],
-            metadata: metadata_for(
-              name: slot_name,
-              compressed_offset: result[:secret_offset],
-              replacement_length: result[:secret_length],
-              html_placeholder_offset: html_offset,
-              html_placeholder_length: html_length,
-              context_suffix: result[:context_suffix],
-            ),
+            metadata: metadata_for(compressed_slots),
           )
         rescue BrotliSplice::Error, ArgumentError => error
           ResponseBank.log("BrotliSplice encode skipped: #{error.class}")
-          nil
+          EncodedBody.new(body: prepared_body)
         end
       end
 
-      def metadata_for(
-        name:,
-        compressed_offset:,
-        replacement_length:,
-        html_placeholder_offset:,
-        html_placeholder_length:,
-        context_suffix:
-      )
+      def metadata_for(slots)
         {
           METADATA_KEY => {
             'version' => METADATA_VERSION,
-            'slots' => [{
-              'name' => name.to_s,
-              'compressed_offset' => compressed_offset,
-              'replacement_length' => replacement_length,
-              'html_placeholder_offset' => html_placeholder_offset,
-              'html_placeholder_length' => html_placeholder_length,
-              'context_suffix' => context_suffix,
-            }],
+            'slots' => slots.map { |slot| slot_metadata(**slot) },
           },
         }
       end
@@ -91,28 +88,12 @@ module ResponseBank
         ensure_brotli_splice_loaded!
 
         begin
-          slots.reduce(body) do |current_body, slot|
-            replacement = replacement_for_slot(injector, slot)
+          # A slot that cannot be filled keeps its neutral placeholder; the others are
+          # still written, with a single copy of the body.
+          replacements = slots.filter_map { |slot| compressed_replacement(injector, body, slot) }
+          return body if replacements.empty?
 
-            unless valid_replacement?(replacement, slot)
-              got = replacement ? replacement.bytesize : 'nil'
-              ResponseBank.log(
-                'BrotliSplice replace skipped: replacement length mismatch ' \
-                "(got #{got}, want #{slot['replacement_length']})",
-              )
-              next current_body
-            end
-
-            offset = integer_value(slot['compressed_offset'])
-            length = integer_value(slot['replacement_length'])
-
-            unless valid_compressed_slot?(current_body, offset, length)
-              ResponseBank.log('BrotliSplice replace skipped: compressed slot out of bounds')
-              next current_body
-            end
-
-            BrotliSplice.replace(current_body, replacement, offset, length)
-          end
+          BrotliSplice.replace_slots(body, replacements)
         rescue BrotliSplice::Error, ArgumentError => error
           ResponseBank.log("BrotliSplice replace skipped: #{error.class}")
           body
@@ -149,17 +130,73 @@ module ResponseBank
         return if @brotli_splice_loaded
 
         begin
-          gem('brotli_splice')
+          gem('brotli_splice', '>= 0.3.0')
           require('brotli_splice')
         rescue LoadError => error
           warn(
-            'The Brotli splice slot feature requires the "brotli_splice" gem. ' \
+            'The Brotli splice slot feature requires the "brotli_splice" gem, version 0.3.0 or newer. ' \
             'Add it to your application Gemfile.',
           )
           raise error
         end
 
         @brotli_splice_loaded = true
+      end
+
+      def slot_metadata(
+        name:,
+        compressed_offset:,
+        replacement_length:,
+        html_placeholder_offset:,
+        html_placeholder_length:,
+        context_suffix:
+      )
+        {
+          'name' => name.to_s,
+          'compressed_offset' => compressed_offset,
+          'replacement_length' => replacement_length,
+          'html_placeholder_offset' => html_placeholder_offset,
+          'html_placeholder_length' => html_placeholder_length,
+          'context_suffix' => context_suffix,
+        }
+      end
+
+      # Returns the injector's slots with Integer byte ranges, or nil unless there is
+      # at least one slot and every range fits the body. BrotliSplice.encode_slots
+      # checks that the ranges are ascending and do not overlap.
+      def html_slots(body, slots)
+        return unless slots.is_a?(Array) && !slots.empty?
+
+        slots.map do |slot|
+          offset = integer_value(hash_fetch(slot, :offset))
+          length = integer_value(hash_fetch(slot, :length))
+          return unless valid_html_slot?(body, offset, length)
+
+          { name: hash_fetch(slot, :name).to_s, offset: offset, length: length }
+        end
+      end
+
+      def compressed_replacement(injector, body, slot)
+        replacement = replacement_for_slot(injector, slot)
+
+        unless valid_replacement?(replacement, slot)
+          got = replacement ? replacement.bytesize : 'nil'
+          ResponseBank.log(
+            'BrotliSplice replace skipped: replacement length mismatch ' \
+            "(got #{got}, want #{slot['replacement_length']})",
+          )
+          return
+        end
+
+        offset = integer_value(slot['compressed_offset'])
+        length = integer_value(slot['replacement_length'])
+
+        unless valid_compressed_slot?(body, offset, length)
+          ResponseBank.log('BrotliSplice replace skipped: compressed slot out of bounds')
+          return
+        end
+
+        [replacement, offset, length]
       end
 
       def replacement_for_slot(injector, slot)

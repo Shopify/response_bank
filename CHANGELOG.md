@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-10-27
+
+### Added
+- `prepare_response_bank_brotli_splice` may return several slots. Each gets its
+  own metadata entry, and a Brotli cache hit fills them all with one copy of the
+  body; a slot whose replacement does not fit keeps its placeholder. The cache
+  format and `BrotliSpliceSlot::METADATA_VERSION` are unchanged, so existing
+  entries still read correctly ([#127]).
+
+### Changed
+- Brotli splicing requires `brotli_splice` 0.3.0 or newer. Apps that use splice
+  slots must upgrade it in the same deploy: with an older version installed,
+  spliced misses and Brotli hits on spliced entries raise `Gem::LoadError`,
+  which ResponseBank does not rescue ([#127]).
+- `BrotliSpliceSlot.metadata_for` takes an Array of slot descriptors ([#127]).
+
+### Fixed
+- When an injector prepares a body whose slots cannot be encoded, the prepared
+  body is cached without slots instead of the response as rendered, so
+  per-request values no longer reach the shared cache ([#127]).
+- When an injector returns a Hash without `:body`, ResponseBank raises
+  `ArgumentError` and caches nothing, instead of caching the response as
+  rendered ([#127]).
+
 ## [1.8.0] - 2026-10-26
 
 ### Changed
@@ -67,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Releases prior to 1.3.8 are recorded in the project's git tags and GitHub Releases.
 
+[1.9.0]: https://github.com/Shopify/response_bank/releases/tag/v1.9.0
 [1.8.0]: https://github.com/Shopify/response_bank/releases/tag/v1.8.0
 [1.7.0]: https://github.com/Shopify/response_bank/releases/tag/v1.7.0
 [1.6.0]: https://github.com/Shopify/response_bank/releases/tag/v1.6.0
@@ -79,4 +104,5 @@ Releases prior to 1.3.8 are recorded in the project's git tags and GitHub Releas
 [#118]: https://github.com/Shopify/response_bank/pull/118
 [#119]: https://github.com/Shopify/response_bank/pull/119
 [#125]: https://github.com/Shopify/response_bank/pull/125
+[#127]: https://github.com/Shopify/response_bank/pull/127
 [#128]: https://github.com/Shopify/response_bank/pull/128
